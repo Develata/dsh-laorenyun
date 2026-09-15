@@ -49,6 +49,7 @@ export async function apply(ctx: Context): Promise<void> {
           key:
             | "system-prompt"
             | "turn-process"
+            | "turn-tail"
             | "context"
             | "user"
             | "steering";
@@ -61,7 +62,12 @@ export async function apply(ctx: Context): Promise<void> {
         }) => React.ReactNode,
       ): () => void;
     };
-    for (const key of ["system-prompt", "turn-process", "context"] as const)
+    for (const key of [
+      "system-prompt",
+      "turn-process",
+      "turn-tail",
+      "context",
+    ] as const)
       chatSlots.inject("conversation.chat.node", () =>
         chatSlots.register(
           { name: "conversation.chat.node", key, priority: -10 },
