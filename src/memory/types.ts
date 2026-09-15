@@ -99,7 +99,19 @@ export interface ExtractionOperation {
 export interface ExtractionInput {
   operation: ExtractionOperation;
   transcript: TranscriptSegment;
-  candidates: GraphNode[];
+  candidates: Array<
+    Pick<
+      GraphNode,
+      | "id"
+      | "revision"
+      | "keySentence"
+      | "time"
+      | "placement"
+      | "status"
+      | "people"
+      | "places"
+    >
+  >;
   conflicts: Conflict[];
 }
 export type TimelineMethod =

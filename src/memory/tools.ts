@@ -1,18 +1,17 @@
+import type { Agent } from "@deepseek-ai/dsh-agent";
 import type { Context } from "@deepseek-ai/cordis";
 import { DomainError } from "../domain/types.ts";
 import type { TimelineQuery, TimelineMethod } from "./types.ts";
 import type {} from "./host.ts";
 export function installMemoryTools(ctx: Context) {
   // Agent-scoped closure, released with its preset. Budget resets only at a real turn boundary.
-  let turnNumber = 0,
-    calls = 0,
-    chars = 0;
-  ctx.on("agent/pre-step", async ({ turn }, next) => {
-    if (turn !== turnNumber) {
-      turnNumber = turn;
-      calls = 0;
-      chars = 0;
-    }
+  const budgets = new WeakMap<
+    Agent,
+    { turn: number; calls: number; chars: number }
+  >();
+  ctx.on("agent/pre-step", async ({ agent, turn }, next) => {
+    if (budgets.get(agent)?.turn !== turn)
+      budgets.set(agent, { turn, calls: 0, chars: 0 });
     return next();
   });
   const tools: TimelineMethod[] = [
@@ -36,38 +35,86 @@ export function installMemoryTools(ctx: Context) {
       parameters: {
         type: "object",
         properties: {
-          id: { type: "string" },
-          revision: { type: "integer" },
-          text: { type: "string" },
-          start: { type: "integer" },
-          end: { type: "integer" },
-          personId: { type: "string" },
-          placeId: { type: "string" },
-          status: { type: "string" },
-          limit: { type: "integer" },
-          cursor: { type: "string" },
+          ...(["get_node", "get_sources", "get_neighbors"].includes(method)
+            ? { id: { type: "string", description: "精确节点ID" } }
+            : {}),
+          ...(["get_node", "get_sources"].includes(method)
+            ? {
+                revision: {
+                  type: ["integer", "null"],
+                  description: "历史修订；当前版本用null",
+                },
+              }
+            : {}),
+          ...(method === "get_conflicts"
+            ? {
+                id: {
+                  type: ["string", "null"],
+                  description: "按节点过滤或null",
+                },
+              }
+            : {}),
+          ...(method === "search"
+            ? {
+                text: {
+                  type: ["string", "null"],
+                  description: "单个关键词或null；不要拼接多个实体",
+                },
+                personId: { type: ["string", "null"] },
+                placeId: { type: ["string", "null"] },
+                status: { type: ["string", "null"] },
+              }
+            : {}),
+          ...(method === "get_period"
+            ? { start: { type: "integer" }, end: { type: "integer" } }
+            : {}),
+          ...(!["get_node"].includes(method)
+            ? {
+                limit: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: method === "get_sources" ? 10 : 50,
+                },
+                cursor: {
+                  type: ["string", "null"],
+                  description: "上一页返回的cursor，第一页null",
+                },
+              }
+            : {}),
         },
+        required: ["get_node", "get_sources", "get_neighbors"].includes(method)
+          ? ["id"]
+          : method === "get_period"
+            ? ["start", "end"]
+            : [],
         additionalProperties: false,
       },
       output: {
         schema: { type: "string" },
         render: (_args, value) => [{ type: "text", text: String(value) }],
       },
-      execute: async (args) => {
-        if (++calls > 6)
+      execute: async (args, exec) => {
+        const budget = exec.agent ? budgets.get(exec.agent) : undefined;
+        if (!budget)
+          throw new DomainError("SESSION_REQUIRED", "timeline budget");
+        if (++budget.calls > 6)
           throw new DomainError("TOOL_BUDGET", "six memory queries per turn");
         const output = JSON.stringify(
           await ctx.laorenyunMemory.db.call("timeline", {
-            ...(args as Omit<TimelineQuery, "method">),
+            ...(Object.fromEntries(
+              Object.entries(args as Record<string, unknown>).filter(
+                ([, v]) => v !== null && v !== "",
+              ),
+            ) as Omit<TimelineQuery, "method">),
             method,
           }),
         );
-        if (chars + output.length > 12000)
+        if (budget.chars + output.length > 12000)
           throw new DomainError(
             "CONTEXT_BUDGET",
             "memory deep reads exhausted for this turn",
           );
-        chars += output.length;
+        budget.chars += output.length;
         return output;
       },
     });
@@ -188,6 +235,7 @@ export function installMemoryTools(ctx: Context) {
   ctx.on("system-prompt/assemble", async (_assembly, context, next) => {
     const value = await next();
     if (!context.agent) return value;
+    value.contexts = []; // This preset owns the complete bounded interview context.
     const branch = await ctx.laorenyunMemory.db.call(
       "getBranch",
       String(context.agent.id),
@@ -235,7 +283,17 @@ export function installMemoryTools(ctx: Context) {
       });
       value.contexts.push({
         name: "laorenyun-memory",
-        text: content.slice(0, 8000),
+        text:
+          content.length <= 4000
+            ? content
+            : JSON.stringify({
+                graphRevision: overview.graphRevision,
+                derived: true,
+                truncated: true,
+                nodes: overview.items.slice(0, 6),
+                conflicts: conflicts.items.slice(0, 1),
+                notice: "更多信息请按需查询；摘要不是证据。",
+              }),
       });
     } catch {
       value.contexts.push({

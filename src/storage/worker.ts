@@ -293,7 +293,9 @@ function handle(r: WorkerRequest): unknown {
           graphRevision: graph.revision(),
           regions,
           currentMonth: i.currentMonth,
-          deferred,
+          deferred: deferred.includes("*")
+            ? regions.map((r) => r.id)
+            : deferred,
           seed: randomInt(1, 2147483647),
           boundary: i.boundary,
           userChoseTopic: i.userChoseTopic,

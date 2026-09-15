@@ -25,3 +25,7 @@ BranchMemo.new_memory_candidates 当前固定空数组：每条真实支线答�
 ## 验证
 
 确定性测试在 `tests/memory.test.ts`；Phase 2 schema-only fixture来自5d6d149，无私人内容。`pnpm check`覆盖类型、旧语音/支线测试、迁移/图/提案/调度测试及构建。实际执行结果与实网记录在应用报告；合成测试不能替代真人麦克风。
+
+## 实网装配修正
+
+第一轮容器真实模型证明 Phase2 的 suppressRuntimeContext 会在 assemble waterfall 后清空所有新增上下文，现由完整采访preset拥有有界contexts，不再调用全局屏蔽。通用工具参数表也曾诱发模型为无用start/end填0，现按工具分别定义参数，并用null明确表示不筛选。回归见应用报告。

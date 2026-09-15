@@ -148,7 +148,19 @@ export class GraphStorage {
           t.text,
           t.sessionId,
         )
-        .map((r) => JSON.parse(String(r.json)) as GraphNode);
+        .map((r) => {
+          const n = JSON.parse(String(r.json)) as GraphNode;
+          return {
+            id: n.id,
+            revision: n.revision,
+            keySentence: n.keySentence,
+            time: n.time,
+            placement: n.placement,
+            status: n.status,
+            people: n.people ?? [],
+            places: n.places ?? [],
+          };
+        });
       const conflicts = this.db
         .prepare(
           "SELECT json FROM conflicts WHERE status='open' ORDER BY rowid DESC LIMIT 5",
@@ -596,7 +608,20 @@ export class GraphStorage {
     if (q.method === "get_node") {
       const n = this.node(q.id ?? "", q.revision);
       if (!n) throw new DomainError("NOT_FOUND", "memory");
-      return { items: [n], graphRevision: rev, truncated: false };
+      return {
+        items: [
+          {
+            ...n,
+            evidence: undefined,
+            sourceRefs: (n.evidence ?? [])
+              .slice(0, 10)
+              .map((e) => ({ transcriptId: e.transcriptId, field: e.field })),
+            sourcesTruncated: (n.evidence?.length ?? 0) > 10,
+          },
+        ],
+        graphRevision: rev,
+        truncated: false,
+      };
     }
     if (q.method === "get_sources") {
       const n = this.node(q.id ?? "", q.revision);

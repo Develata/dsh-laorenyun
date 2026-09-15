@@ -421,3 +421,144 @@ test("proposal strict schema rejects extra fields and malformed evidence", () =>
     /INVALID_PROPOSAL/,
   );
 });
+
+test("ASR correction is one testimony; compatible granularity cannot create conflict even if classifier says so", async () => {
+  const db = await DomainDatabase.open(await temp());
+  try {
+    const t = await human(db, "1978年，我在合肥读书。"),
+      left = (await apply(db, proposal(t, time(1978)))).nodeIds[0]!;
+    const u = await human(db, "1978年9月，我在合肥读书。");
+    const q = proposal(u, {
+      start: 1978 * 12 + 8,
+      end: 1978 * 12 + 8,
+      precision: "month",
+      certainty: "stated",
+      originalText: "1978年9月",
+    });
+    await apply(db, q, {
+      comparisons: [
+        {
+          proposal: 0,
+          nodeId: left,
+          revision: 1,
+          verdict: "material_conflict",
+          explanation: "模型误判日期颗粒度",
+        },
+      ],
+    });
+    assert.equal(
+      (await db.call("timeline", { method: "get_conflicts" })).items.length,
+      0,
+    );
+  } finally {
+    await db.close();
+  }
+});
+test("obvious explicit entity may reuse bounded identity; same spelling alone does not prove identity", async () => {
+  const raw = new DatabaseSync(":memory:");
+  migrate(raw);
+  const graph = new GraphStorage(raw);
+  const first = graph.entity(
+    "places",
+    { name: "合肥", identity: "explicit" },
+    new Set(),
+  );
+  assert.equal(
+    graph.entity(
+      "places",
+      { name: "合肥", identity: "explicit", reuseId: first },
+      new Set([first]),
+    ),
+    first,
+  );
+  assert.notEqual(
+    graph.entity("places", { name: "合肥", identity: "explicit" }, new Set()),
+    first,
+  );
+  assert.throws(
+    () =>
+      graph.entity(
+        "places",
+        { name: "合肥", identity: "ambiguous", reuseId: first },
+        new Set([first]),
+      ),
+    /IDENTITY_UNCERTAIN/,
+  );
+  raw.close();
+});
+test("refusal is captured at testimony acceptance and suppresses exploration without a tool reminder", async () => {
+  const db = await DomainDatabase.open(await temp());
+  try {
+    const a = await human(db, "1950年，我出生在合肥。");
+    await apply(db, proposal(a, time(1950)));
+    const t = await human(db, "这个先跳过，我不想谈。");
+    const result = await db.call("schedule", {
+      sessionId: "main",
+      boundary: true,
+      userChoseTopic: false,
+      currentMonth: 1950 * 12,
+      transcriptId: t.id,
+    });
+    assert.equal(result.selected, null);
+    assert.equal(result.candidates.length, 0);
+  } finally {
+    await db.close();
+  }
+});
+test("structured model permits one repair, rejects oversized output, and obeys external cancellation", async () => {
+  const { InternalModel } = await import("../src/memory/model.ts");
+  let calls = 0;
+  const model = new InternalModel({
+    stream: async function* () {
+      calls++;
+      yield {
+        type: "text-delta" as const,
+        index: 0,
+        text:
+          calls === 1
+            ? "not json"
+            : '{"proposals":[],"comparisons":[],"resolutions":[]}',
+      };
+    },
+  });
+  const result = await model.json(
+    { provider: "fixture", model: "fixture" },
+    "test",
+    {},
+    parseExtraction,
+    AbortSignal.timeout(500),
+  );
+  assert.equal(result.evidence.repairs, 1);
+  assert.equal(calls, 2);
+  const oversized = new InternalModel({
+    stream: async function* () {
+      yield { type: "text-delta" as const, index: 0, text: "x".repeat(48001) };
+    },
+  });
+  await assert.rejects(
+    oversized.json(
+      { provider: "fixture", model: "fixture" },
+      "test",
+      {},
+      parseExtraction,
+      AbortSignal.timeout(500),
+    ),
+    /MODEL_SIZE/,
+  );
+  const never = new InternalModel({
+    stream: async function* () {
+      await new Promise((r) => setTimeout(r, 100));
+      yield { type: "text-delta" as const, index: 0, text: "{}" };
+    },
+  });
+  await assert.rejects(
+    never.json(
+      { provider: "fixture", model: "fixture" },
+      "test",
+      {},
+      parseExtraction,
+      AbortSignal.timeout(5),
+    ),
+    /MODEL_TIMEOUT/,
+  );
+});

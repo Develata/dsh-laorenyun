@@ -16,7 +16,6 @@ export async function apply(ctx: Context): Promise<void> {
     complete: true,
     text: skill,
   });
-  ctx.systemPrompt.suppressRuntimeContext();
   installMemoryTools(ctx);
   const names = [
     "questioning",
