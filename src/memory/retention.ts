@@ -29,7 +29,8 @@ export function installRetention(ctx: Context) {
     if (humans.length < 9) return next();
     const first = agent.session.eventAt(surface[0]!);
     const start = first?.type === "system/message" ? 1 : 0;
-    const keep = humans[1]!; // Retain the most recent eight complete human turns, plus this new input.
+    // Batch older turns: a one-turn summary can be larger than its source.
+    const keep = humans[4]!; // Keep five recent turns plus incoming input; never the full archive.
     if (keep <= start) return next();
     const compaction = ctx.get("compaction") as NativeCompaction | undefined;
     if (!compaction)

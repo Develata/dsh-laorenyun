@@ -654,7 +654,7 @@ test("native retention compacts only older balanced turn range through the publi
       return { kind: "enter" };
     },
   );
-  assert.deepEqual(bounds, [1, 4]);
+  assert.deepEqual(bounds, [1, 10]);
   assert.equal(next, 1);
   assert.equal(events.length, 21);
 });

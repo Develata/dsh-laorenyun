@@ -35,3 +35,5 @@ BranchMemo.new_memory_candidates 当前固定空数组：每条真实支线答�
 冲突澄清会给两端各追加修订：选中端恢复confirmed/candidate，另一端superseded，旧revision与证言永远保留。Conflict两端ID/修订属于内部任务有界输入；一并校验，避免遗漏非词面匹配的一侧。只澄清时不重复造新事件。Memo记录模型耗时/格式修复次数。
 
 压缩服务由应用采访preset的隔离组装载，interviewer显式依赖compaction；只修改上层preset，不修改DSH代码。已持久提案冷恢复保持原graphRevision/白名单，CAS失败进入有界重抽取。
+
+历史压缩在第九个保留真人轮触发，一批压缩较早的若干完整轮，保留最近五轮及新输入；这满足约八轮上限且避免“压缩一条短回答后摘要反而更大”。摘要最大256 tokens由发行preset配置。原文仍在DSH日志；摘要绝不进入抽取来源。
