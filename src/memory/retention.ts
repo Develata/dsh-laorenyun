@@ -1,0 +1,48 @@
+import type { Context } from "@deepseek-ai/cordis";
+import type { Agent } from "@deepseek-ai/dsh-agent";
+import type { SessionSeq } from "@deepseek-ai/dsh-session";
+/** Narrow published compaction service; supplied by the pinned base bundle, no extra implementation/package. */
+interface NativeCompaction {
+  compactRegion(
+    start: SessionSeq,
+    end: SessionSeq,
+    agent: Agent,
+    signal: AbortSignal,
+  ): Promise<unknown>;
+}
+export function installRetention(ctx: Context) {
+  ctx.on("agent/pre-step", async ({ agent, messages, signal }, next) => {
+    if (!messages.some((m) => m.source.kind === "user" && "rpcId" in m.source))
+      return next();
+    const surface = agent.session.surface.nodes;
+    // Read only the currently retained surface; old archived log remains untouched.
+    const humans: number[] = [];
+    for (let i = surface.length - 1; i >= 0 && humans.length < 9; i--) {
+      const e = agent.session.eventAt(surface[i]!);
+      if (
+        e?.type === "user/message" &&
+        e.data.source.kind === "user" &&
+        "rpcId" in e.data.source
+      )
+        humans.unshift(i);
+    }
+    if (humans.length < 9) return next();
+    const first = agent.session.eventAt(surface[0]!);
+    const start = first?.type === "system/message" ? 1 : 0;
+    const keep = humans[1]!; // Retain the most recent eight complete human turns, plus this new input.
+    if (keep <= start) return next();
+    const compaction = ctx.get("compaction") as NativeCompaction | undefined;
+    if (!compaction)
+      throw new Error(
+        "MEMORY_CONTEXT: pinned native compaction service missing",
+      );
+    // The public implementation checks balanced tool boundaries, persists the replacement and preserves the log.
+    await compaction.compactRegion(
+      surface[start]!,
+      surface[keep - 1]!,
+      agent,
+      AbortSignal.any([signal, AbortSignal.timeout(60000)]),
+    );
+    return next();
+  });
+}

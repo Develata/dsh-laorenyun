@@ -562,3 +562,51 @@ test("structured model permits one repair, rejects oversized output, and obeys e
     /MODEL_TIMEOUT/,
   );
 });
+
+test("native retention compacts only older balanced turn range through the published service", async () => {
+  const { installRetention } = await import("../src/memory/retention.ts");
+  let listener: Function | undefined;
+  let bounds: unknown[] = [];
+  const context = {
+    on: (_name: string, fn: Function) => {
+      listener = fn;
+    },
+    get: () => ({
+      compactRegion: async (...args: unknown[]) => {
+        bounds = args.slice(0, 2);
+      },
+    }),
+  };
+  installRetention(context as unknown as import("@deepseek-ai/cordis").Context);
+  const events = [
+    { type: "system/message", data: {} },
+    ...Array.from({ length: 10 }, () => [
+      {
+        type: "user/message",
+        data: { source: { kind: "user", rpcId: "human" } },
+      },
+      { type: "assistant/message", data: {} },
+    ]).flat(),
+  ];
+  const agent = {
+    session: {
+      surface: { nodes: events.map((_, i) => i) },
+      eventAt: (i: number) => events[i],
+    },
+  };
+  let next = 0;
+  await listener!(
+    {
+      agent,
+      messages: [{ source: { kind: "user", rpcId: "new" } }],
+      signal: AbortSignal.timeout(500),
+    },
+    async () => {
+      next++;
+      return { kind: "enter" };
+    },
+  );
+  assert.deepEqual(bounds, [1, 4]);
+  assert.equal(next, 1);
+  assert.equal(events.length, 21);
+});

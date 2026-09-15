@@ -29,3 +29,5 @@ BranchMemo.new_memory_candidates 当前固定空数组：每条真实支线答�
 ## 实网装配修正
 
 第一轮容器真实模型证明 Phase2 的 suppressRuntimeContext 会在 assemble waterfall 后清空所有新增上下文，现由完整采访preset拥有有界contexts，不再调用全局屏蔽。通用工具参数表也曾诱发模型为无用start/end填0，现按工具分别定义参数，并用null明确表示不筛选。回归见应用报告。
+
+固定版DSH的普通sessionController.resolveAgent拒绝subagent所有权；插件按领域父子绑定验证后，活跃child读agents.get，冷child使用公开inspect，真人输入通过原生subagent prompt恢复。老人slot隐藏tool-call/result及无RPC初始化消息，避免内部JSON成为口述历史。Main保留最近约8轮原话，超出时调用已装载的公开compaction.compactRegion；原生日志不删除，摘要不进入抽取证据。压缩失败显式报错，证言不回滚；不绕过DSH重写模型请求。

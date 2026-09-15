@@ -1,3 +1,4 @@
+import { installRetention } from "./memory/retention.ts";
 import { installMemoryTools } from "./memory/tools.ts";
 import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-agent";
@@ -17,6 +18,7 @@ export async function apply(ctx: Context): Promise<void> {
     text: skill,
   });
   installMemoryTools(ctx);
+  installRetention(ctx);
   const names = [
     "questioning",
     "chronology",

@@ -46,7 +46,8 @@ export async function installIntelligence(
     }
   };
   const route = async (id: string) => {
-    const agent = await resolveBounded(id);
+    const branch = await db.call("getBranch", id);
+    const agent = await resolveBounded(branch?.parentSessionId ?? id);
     const c = agent.session.requestHeader()?.config ?? agent.options;
     if (!c.provider || !c.model)
       throw new DomainError("MODEL_CONFIG", "interview route missing");

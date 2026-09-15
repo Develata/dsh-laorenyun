@@ -50,6 +50,8 @@ export async function apply(ctx: Context): Promise<void> {
             | "system-prompt"
             | "turn-process"
             | "turn-tail"
+            | "tool-call"
+            | "tool-result"
             | "context"
             | "user"
             | "steering";
@@ -57,7 +59,10 @@ export async function apply(ctx: Context): Promise<void> {
         },
         view: (props: {
           node?: {
-            data?: { content?: readonly { type: string; text?: string }[] };
+            data?: {
+              content?: readonly { type: string; text?: string }[];
+              source?: { kind: string; rpcId?: string };
+            };
           };
         }) => React.ReactNode,
       ): () => void;
@@ -66,6 +71,8 @@ export async function apply(ctx: Context): Promise<void> {
       "system-prompt",
       "turn-process",
       "turn-tail",
+      "tool-call",
+      "tool-result",
       "context",
     ] as const)
       chatSlots.inject("conversation.chat.node", () =>
@@ -78,23 +85,25 @@ export async function apply(ctx: Context): Promise<void> {
       chatSlots.inject("conversation.chat.node", () =>
         chatSlots.register(
           { name: "conversation.chat.node", key, priority: -10 },
-          ({ node }) => (
-            <div
-              style={{
-                whiteSpace: "pre-wrap",
-                padding: "14px 18px",
-                borderRadius: 16,
-                background: "var(--dsw-alias-bg-layer-1)",
-                fontSize: 19,
-                lineHeight: 1.7,
-              }}
-            >
-              {node?.data?.content
-                ?.filter((c) => c.type === "text")
-                .map((c) => parseSourceReference(c.text ?? "").text)
-                .join("\n")}
-            </div>
-          ),
+          ({ node }) =>
+            node?.data?.source?.kind === "user" &&
+            !node.data.source.rpcId ? null : (
+              <div
+                style={{
+                  whiteSpace: "pre-wrap",
+                  padding: "14px 18px",
+                  borderRadius: 16,
+                  background: "var(--dsw-alias-bg-layer-1)",
+                  fontSize: 19,
+                  lineHeight: 1.7,
+                }}
+              >
+                {node?.data?.content
+                  ?.filter((c) => c.type === "text")
+                  .map((c) => parseSourceReference(c.text ?? "").text)
+                  .join("\n")}
+              </div>
+            ),
         ),
       );
     ctx.slots.inject("conversation.composer.dock", () =>
@@ -318,6 +327,7 @@ export async function apply(ctx: Context): Promise<void> {
           ) {
             await ctx.sessions.refreshSubagents(sessionId);
             if (mounted.current) {
+              awaitingFirstPlayback = v.activeBranch.sessionId;
               ctx.sessions.openSubagent({
                 parentSessionId: sessionId,
                 childSessionId: v.activeBranch.sessionId as SessionId,

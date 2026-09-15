@@ -80,6 +80,20 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const resolve = async (id: string) => {
     if (!id || id.length > 128)
       throw new DomainError("INVALID_SESSION", "session identity");
+    const b = await app.db.call("getBranch", id);
+    if (b) {
+      const parent = await ctx.sessionController.resolveAgent(
+        SessionId(b.parentSessionId),
+      );
+      if ("error" in parent)
+        throw new DomainError("SESSION_ERROR", "branch parent unavailable");
+      const child = ctx.agents.get(SessionId(id));
+      if (child) return child;
+      throw new DomainError(
+        "CHILD_COLD",
+        "native subagent prompt will resume child",
+      );
+    }
     const result = await ctx.sessionController.resolveAgent(SessionId(id));
     if ("error" in result)
       throw new DomainError("SESSION_ERROR", "interview is unavailable");
@@ -92,10 +106,21 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     await app.close();
   });
   const reconcile = async (id: string) => {
-    const agent = await resolve(id);
+    const b = await app.db.call("getBranch", id);
+    if (b) await resolve(b.parentSessionId);
+    const agent = b
+      ? (ctx.agents.get(SessionId(id)) ?? null)
+      : await resolve(id);
     const receipts = await app.db.call("getReceipts", id);
     // Public native snapshot; no filesystem log parsing and no new-ID retransmission.
-    const events = agent.session.snapshotEvents();
+    const events = agent
+      ? agent.session.snapshotEvents()
+      : (
+          await ctx.sessionController.inspect(
+            SessionId(id),
+            AbortSignal.timeout(5000),
+          )
+        ).events;
     for (const { transcript, state } of receipts) {
       if (state === "session-observed") continue;
       const observed = events.some(
@@ -119,7 +144,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         !e.data.interrupted &&
         !e.data.message.content.some((c) => c.type === "tool-call"),
     );
-    if (final?.type === "assistant/message" && agent.status === "idle") {
+    if (
+      final?.type === "assistant/message" &&
+      (!agent || agent.status === "idle")
+    ) {
       const text = final.data.message.content
         .filter((c) => c.type === "text")
         .map((c) => c.text)
@@ -360,7 +388,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return { paused: true };
   });
   route("reserve-recording", async (b) => {
-    await resolve(String(b.sessionId));
+    const branch = await app.db.call("getBranch", String(b.sessionId));
+    if (branch) {
+      await resolve(branch.parentSessionId);
+      await ctx.sessionController.inspect(
+        SessionId(String(b.sessionId)),
+        AbortSignal.timeout(5000),
+      );
+    } else await resolve(String(b.sessionId));
     return speech.reserve(String(b.sessionId), String(b.sourceId) as SourceId);
   });
   route("recognize", (b) =>
