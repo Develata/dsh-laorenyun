@@ -44,6 +44,10 @@ Host 只处理 `role=user`、`source.kind=user` 且具有 DSH 浏览器 `rpcId` 
 
 自动测试覆盖空库、重开、原件 checksum/权限、校订与幂等、跨 session/取消、记忆 FK/漂流/修订、非人类消息、第五答关闭/冷恢复、损坏库错误、文件发布失败恢复、持久 Speaker 和改变内容的重复请求。
 
+## 主题实测修正
+
+此 DSH pin 只持久化 light/dark/system，注册自定义 theme ID 后 setTheme 会被异步 settings adoption 覆盖。使用官方 `overrideTokens` light/dark 层保持暖色，不监听事件强行抢回偏好；构建器初始设置 light/17px，保留已有设置。
+
 ## 已知 Phase 2 接口工作
 
 目前假 ASR 来源一次最多 32 MiB 完整写入；Phase 0 的分片上传、真正时间范围和 raw-ASR-attempt 实体留给 Phase 2。引用标记当前会显示在原生用户气泡/自动标题中：它是开发接入证明，Phase 2 应通过公开会话投影/renderer 隐藏展示层标记，仍保留原生日志中的 ID。不得仅为了美观删掉唯一关联信息。

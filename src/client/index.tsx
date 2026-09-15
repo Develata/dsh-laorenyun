@@ -23,22 +23,19 @@ export const inject = [
   "locale",
 ];
 export function apply(ctx: Context): void {
+  // Custom theme ids are not persisted by this DSH pin. Token layers survive
+  // the asynchronous built-in preference adoption from Host settings.
   ctx.effect(() =>
-    ctx.theme.register({
-      id: "laorenyun-warm",
-      colorScheme: "light",
-      tokens: {
-        "--dsw-alias-bg-base": "#faf7f0",
-        "--dsw-alias-bg-layer-1": "#f3efe4",
-        "--dsw-alias-bg-layer-2": "#eee9db",
-        "--dsw-alias-label-primary": "#393b35",
-        "--dsw-alias-label-secondary": "#696b60",
-        "--dsw-alias-brand-primary": "#48776b",
-        "--dsw-specific-sidebar-fill": "#f3efe4",
-      },
+    ctx.theme.overrideTokens("dsh-laorenyun", {
+      "--dsw-alias-bg-base": { light: "#faf7f0", dark: "#262c28" },
+      "--dsw-alias-bg-layer-1": { light: "#f3efe4", dark: "#303833" },
+      "--dsw-alias-bg-layer-2": { light: "#eee9db", dark: "#3b433e" },
+      "--dsw-alias-label-primary": { light: "#393b35", dark: "#f3efe4" },
+      "--dsw-alias-label-secondary": { light: "#696b60", dark: "#c6c6b8" },
+      "--dsw-alias-brand-primary": { light: "#48776b", dark: "#8fbdae" },
+      "--dsw-specific-sidebar-fill": { light: "#f3efe4", dark: "#303833" },
     }),
   );
-  ctx.theme.setTheme("laorenyun-warm");
   ctx.locale.setLocale("zh");
   ctx.effect(() =>
     ctx.inputTriggers.registerSource({
