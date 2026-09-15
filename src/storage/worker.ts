@@ -188,7 +188,12 @@ function handle(r: WorkerRequest): unknown {
           b.id,
           JSON.stringify(memo),
         );
-        return saveBranch({ ...b, memo, state: "closed" });
+        return saveBranch({
+          ...b,
+          memo,
+          state: "closed",
+          ...(r.input.evidence ? { memoGeneration: r.input.evidence } : {}),
+        });
       });
     case "branchPending":
       return db
@@ -269,9 +274,9 @@ function handle(r: WorkerRequest): unknown {
             const unresolved = Number(
               db
                 .prepare(
-                  "SELECT count(*) n FROM conflicts f JOIN memory_revisions r ON r.id=f.left_id AND r.revision=f.left_revision WHERE f.status='open' AND json_extract(r.json,'$.time.start')<=? AND json_extract(r.json,'$.time.end')>=?",
+                  "SELECT count(*) n FROM (SELECT f.id FROM conflicts f JOIN memory_revisions r ON r.id=f.left_id AND r.revision=f.left_revision WHERE f.status='open' AND json_extract(r.json,'$.time.start')<=? AND json_extract(r.json,'$.time.end')>=? UNION ALL SELECT r.id FROM memory_revisions r JOIN memory_current c USING(id,revision) WHERE json_extract(r.json,'$.status')='candidate' AND json_extract(r.json,'$.time.start')<=? AND json_extract(r.json,'$.time.end')>=?)",
                 )
-                .get(hi, m)!.n,
+                .get(hi, m, hi, m)!.n,
             );
             regions.push({
               id: String(m),

@@ -112,27 +112,32 @@ export async function installIntelligence(
         inputRevision: b.answerCount,
       };
       let memo = partialMemo(input);
+      let evidence: Branch["memoGeneration"];
       try {
-        memo = (
-          await model.json(
-            await route(b.parentSessionId),
-            MEMO_PROMPT,
-            {
-              ...input,
-              returnAnchor: b.returnAnchor,
-              answers: answers.map((t) => ({
-                id: t.id,
-                text: t.text.slice(0, 4000),
-              })),
-            },
-            (text) => parseMemo(text, input),
-            stop.signal,
-          )
-        ).value;
+        const generated = await model.json(
+          await route(b.parentSessionId),
+          MEMO_PROMPT,
+          {
+            ...input,
+            returnAnchor: b.returnAnchor,
+            answers: answers.map((t) => ({
+              id: t.id,
+              text: t.text.slice(0, 4000),
+            })),
+          },
+          (text) => parseMemo(text, input),
+          stop.signal,
+        );
+        memo = generated.value;
+        evidence = generated.evidence;
       } catch {
         ctx.logger.warn("laorenyun branch: PARTIAL_MEMO");
       }
-      b = await db.call("branchMemo", { sessionId: b.sessionId, memo });
+      b = await db.call("branchMemo", {
+        sessionId: b.sessionId,
+        memo,
+        evidence,
+      });
     }
     if (b.state === "closed" && !b.returned) {
       const parent = await resolveBounded(b.parentSessionId),

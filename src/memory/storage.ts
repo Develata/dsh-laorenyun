@@ -109,12 +109,25 @@ export class GraphStorage {
   }
   claim(): ExtractionInput | null {
     return this.tx(() => {
-      const row = this.db
+      let row = this.db
         .prepare(
           "SELECT id FROM memory_extraction_operations WHERE state IN ('pending','proposed','validated') ORDER BY rowid LIMIT 1",
         )
         .get();
-      if (!row) return null;
+      if (!row) {
+        const legacy = this.db
+          .prepare(
+            "SELECT t.json FROM transcripts t LEFT JOIN memory_extraction_operations o ON o.transcript_id=t.id WHERE o.id IS NULL LIMIT 50",
+          )
+          .all();
+        for (const r of legacy) this.enqueue(JSON.parse(String(r.json)));
+        row = this.db
+          .prepare(
+            "SELECT id FROM memory_extraction_operations WHERE state='pending' ORDER BY rowid LIMIT 1",
+          )
+          .get();
+        if (!row) return null;
+      }
       const op = this.operation(String(row.id))!;
       const t = this.transcript(op.transcriptId);
       const hash = createHash("sha256")
@@ -173,10 +186,10 @@ export class GraphStorage {
         )
         .run(
           JSON.stringify({
-            candidates: candidates.map((n) => ({
-              id: n.id,
-              revision: n.revision,
-            })),
+            candidates: [
+              ...candidates.map((n) => ({ id: n.id, revision: n.revision })),
+              ...conflicts.flatMap((c) => [c.left, c.right]),
+            ],
             conflicts: conflicts.map((c) => c.id),
           }),
           op.id,
@@ -345,6 +358,13 @@ export class GraphStorage {
         )
         .run(id);
       for (const [index, p] of result.proposals.entries()) {
+        // Explicit resolution creates the revision below. Do not duplicate its
+        // selected claim from a model that also repeats it as a proposal.
+        if (
+          p.targetId &&
+          result.resolutions.some((r) => r.selectedNodeId === p.targetId)
+        )
+          continue;
         let comparisons = result.comparisons.filter(
           (c) => c.proposal === index,
         );
@@ -506,6 +526,27 @@ export class GraphStorage {
             "INVALID_RESOLUTION",
             "selected fact must be named explicitly",
           );
+        for (const ref of [c.left, c.right]) {
+          const current = this.node(ref.id)!;
+          if ((current.evidence?.length ?? 0) >= 100)
+            throw new DomainError(
+              "EVIDENCE_LIMIT",
+              "resolution revision evidence",
+            );
+          this.write({
+            ...current,
+            revision: current.revision + 1,
+            transcriptId: t.id,
+            evidence: [...(current.evidence ?? []), r.evidence],
+            status:
+              current.id === r.selectedNodeId
+                ? current.basis === "stated" &&
+                  current.time.certainty === "stated"
+                  ? "confirmed"
+                  : "candidate"
+                : "superseded",
+          });
+        }
         c.status = "resolved";
         c.resolution = {
           transcriptId: t.id,
@@ -555,7 +596,7 @@ export class GraphStorage {
       if (
         a.time.start !== null &&
         b.time.end !== null &&
-        a.time.start >= b.time.end
+        a.time.start > b.time.end
       )
         throw new DomainError("INVALID_EDGE", "impossible temporal order");
       const rows = this.db
@@ -738,6 +779,12 @@ export class GraphStorage {
       .prepare("PRAGMA foreign_key_check")
       .all()
       .map((r) => "foreign_key:" + String(r.table));
+    for (const row of this.db
+      .prepare(
+        "SELECT DISTINCT r.id FROM memory_revisions r LEFT JOIN memory_current c ON c.id=r.id WHERE c.id IS NULL",
+      )
+      .all())
+      errors.push("missing_current:" + String(row.id));
     for (const r of this.db
       .prepare(`SELECT r.json FROM memory_revisions r`)
       .iterate()) {

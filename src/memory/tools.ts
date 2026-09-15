@@ -241,6 +241,9 @@ export function installMemoryTools(ctx: Context) {
       String(context.agent.id),
     );
     if (branch?.topic) {
+      value.tools = value.tools.filter((t) =>
+        ["interview_reference", "interview_finish_branch"].includes(t.name),
+      );
       value.contexts.push({
         name: "laorenyun-branch",
         text: JSON.stringify({
@@ -255,6 +258,9 @@ export function installMemoryTools(ctx: Context) {
       });
       return value;
     }
+    value.tools = value.tools.filter(
+      (t) => t.name !== "interview_finish_branch",
+    );
     try {
       const [overview, conflicts, unresolved] = await Promise.all([
         ctx.laorenyunMemory.db.call("timeline", {

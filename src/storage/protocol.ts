@@ -36,7 +36,11 @@ export interface Operations {
   };
   branchClosing: { input: string; output: Branch };
   branchMemo: {
-    input: { sessionId: string; memo: import("../domain/types.ts").BranchMemo };
+    input: {
+      sessionId: string;
+      memo: import("../domain/types.ts").BranchMemo;
+      evidence?: { model: string; latencyMs: number; repairs: number };
+    };
     output: Branch;
   };
   branchPending: { input: null; output: Branch[] };

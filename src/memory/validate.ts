@@ -104,6 +104,8 @@ export function parseExtraction(text: string): ExtractionResult {
       for (const e of p[k]) {
         obj(e, ["name", "identity", "reuseId"]);
         str(e.name, 80);
+        if (["我", "你", "他", "她", "他们", "我们"].includes(e.name))
+          invalid();
         if (!["explicit", "ambiguous"].includes(String(e.identity))) invalid();
         if (e.reuseId !== undefined) str(e.reuseId, 128);
       }
@@ -174,6 +176,22 @@ export function validateProposal(
       "UNSUPPORTED_STATED",
       "stated key sentence must be extractive",
     );
+  if (p.basis === "stated") {
+    const trim = (text: string) => text.replace(/[。！？!?\s]+$/u, "").trim();
+    const complete = p.evidence.some(
+      (e) =>
+        e.field === "claim" &&
+        transcripts
+          .get(e.transcriptId)!
+          .text.split(/[。！？!?\n]/u)
+          .some((sentence) => trim(sentence) === trim(p.keySentence)),
+    );
+    if (!complete)
+      throw new DomainError(
+        "UNSUPPORTED_STATED",
+        "preserve complete sentence qualifiers; fragments remain inferred candidates",
+      );
+  }
   for (const field of ["cause", "process", "result"] as const)
     if (
       p[field] &&

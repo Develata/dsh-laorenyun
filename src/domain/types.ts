@@ -98,6 +98,7 @@ export interface Branch {
   proposalTranscriptId?: string;
   consentTranscriptId?: string;
   returned?: boolean;
+  memoGeneration?: { model: string; latencyMs: number; repairs: number };
   answerCount: number;
   memo: BranchMemo | null;
 }

@@ -123,6 +123,15 @@ test("evidence, inference, drifting, anchor revision, replay, restart and CAS", 
         ),
       /UNSUPPORTED_EVIDENCE/,
     );
+    const negative = { ...t, text: "我没有去合肥一中。" };
+    assert.throws(
+      () =>
+        validateProposal(
+          { ...proposal(negative), keySentence: "去合肥一中" },
+          new Map([[t.id, negative]]),
+        ),
+      /UNSUPPORTED_STATED/,
+    );
     const first = await apply(db, p),
       id = first.nodeIds[0]!;
     assert.equal((await db.call("getMemory", id))!.placement, "drifting");
@@ -226,8 +235,16 @@ test("material historical conflict and explicit clarification preserve both revi
     await db.call("memoryProposal", {
       id: op.operation.id,
       result: {
-        proposals: [],
-        comparisons: [],
+        proposals: [{ ...proposal(clarification), targetId: right }],
+        comparisons: [
+          {
+            proposal: 0,
+            nodeId: left,
+            revision: 1,
+            verdict: "material_conflict",
+            explanation: "模型重复引用已提供的冲突另一端",
+          },
+        ],
         resolutions: [
           {
             conflictId: c.id,
@@ -249,7 +266,20 @@ test("material historical conflict and explicit clarification preserve both revi
       (await db.call("timeline", { method: "get_conflicts" })).items.length,
       0,
     );
-    assert.ok(await db.call("getMemory", left));
+    assert.equal((await db.call("getMemory", left))!.revision, 2);
+    assert.equal(
+      ((await db.call("getMemory", left)) as GraphNode).status,
+      "superseded",
+    );
+    assert.equal(
+      ((await db.call("getMemory", right)) as GraphNode).status,
+      "confirmed",
+    );
+    assert.equal(
+      (await db.call("timeline", { method: "get_node", id: left, revision: 1 }))
+        .items.length,
+      1,
+    );
     assert.equal((await db.call("listTranscripts", "main")).length, 3);
     assert.deepEqual(await db.call("graphIntegrity", null), []);
   } finally {

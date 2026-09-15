@@ -53,7 +53,7 @@ export interface ExtractionResult {
   }[];
 }
 export interface GraphNode extends MemoryNode {
-  status: "confirmed" | "candidate" | "disputed";
+  status: "confirmed" | "candidate" | "disputed" | "superseded";
   people: string[];
   places: string[];
   cause?: string;
