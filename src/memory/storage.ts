@@ -409,7 +409,9 @@ export class GraphStorage {
             ? { ...c, verdict: "not_conflict" as const }
             : c;
         });
-        let old = p.targetId ? this.node(p.targetId) : null;
+        const duplicate = comparisons.find((c) => c.verdict === "duplicate");
+        const target = p.targetId ?? duplicate?.nodeId;
+        let old = target ? this.node(target) : null;
         if (p.targetId && !old)
           throw new DomainError("NOT_FOUND", "target node");
         if (

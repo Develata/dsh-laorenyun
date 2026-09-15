@@ -210,6 +210,35 @@ test("evidence, inference, drifting, anchor revision, replay, restart and CAS", 
     await db.close();
   }
 });
+test("semantic duplicate cannot become a second event when unsafe to merge", async () => {
+  const db = await DomainDatabase.open(await temp());
+  try {
+    const first = await human(db, "1978年，我到合肥读书。"),
+      id = (await apply(db, proposal(first, time(1978)))).nodeIds[0]!;
+    const repeated = await human(db, "1978年，我去了合肥读书。");
+    await assert.rejects(
+      apply(db, proposal(repeated, time(1978)), {
+        comparisons: [
+          {
+            proposal: 0,
+            nodeId: id,
+            revision: 1,
+            verdict: "duplicate",
+            explanation: "同一事件改述",
+          },
+        ],
+      }),
+      /UNSAFE_MERGE/,
+    );
+    assert.equal(
+      (await db.call("timeline", { method: "overview" })).items.length,
+      1,
+    );
+    assert.equal((await db.call("listTranscripts", "main")).length, 2);
+  } finally {
+    await db.close();
+  }
+});
 test("material historical conflict and explicit clarification preserve both revisions", async () => {
   const db = await DomainDatabase.open(await temp());
   try {
@@ -627,7 +656,10 @@ test("native retention compacts only older balanced turn range through the publi
   };
   installRetention(context as unknown as import("@deepseek-ai/cordis").Context);
   const events = [
-    { type: "system/message", data: {} },
+    {
+      type: "system/message",
+      data: { content: [{ type: "text", text: "固定规则".repeat(4000) }] },
+    },
     ...Array.from({ length: 10 }, () => [
       {
         type: "user/message",

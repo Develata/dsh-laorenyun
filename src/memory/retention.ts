@@ -20,7 +20,9 @@ export function installRetention(ctx: Context) {
       const e = agent.session.eventAt(seq);
       return (
         sum +
-        (e && "content" in e.data ? JSON.stringify(e.data.content).length : 0)
+        (e && e.type !== "system/message" && "content" in e.data
+          ? JSON.stringify(e.data.content).length
+          : 0)
       );
     }, 0);
     if (retainedChars <= 8000 && surface.length < (retryAfter.get(agent) ?? 0))
