@@ -1,3 +1,4 @@
+import { fixtureAsr, fixtureTts } from "./probes/speech.ts";
 import { createUserMessage, MessageId } from "@deepseek-ai/dsh-llm";
 import { SpeechService } from "./speech/service.ts";
 import { TencentFlashAsrProvider } from "./speech/tencent-flash.ts";
@@ -52,22 +53,26 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     app,
     config.dataDir,
     () =>
-      new TencentFlashAsrProvider({
-        appId: process.env.TENCENTCLOUD_APP_ID ?? "",
-        secretId: process.env.TENCENTCLOUD_SECRET_ID ?? "",
-        secretKey: process.env.TENCENTCLOUD_SECRET_KEY ?? "",
-        engine: process.env.TENCENT_ASR_ENGINE || "16k_zh_en",
-        timeoutMs: Number(process.env.TENCENT_ASR_TIMEOUT_MS || 90000),
-      }),
+      config.probes && process.env.LAORENYUN_SPEECH_FIXTURE === "true"
+        ? fixtureAsr
+        : new TencentFlashAsrProvider({
+            appId: process.env.TENCENTCLOUD_APP_ID ?? "",
+            secretId: process.env.TENCENTCLOUD_SECRET_ID ?? "",
+            secretKey: process.env.TENCENTCLOUD_SECRET_KEY ?? "",
+            engine: process.env.TENCENT_ASR_ENGINE || "16k_zh_en",
+            timeoutMs: Number(process.env.TENCENT_ASR_TIMEOUT_MS || 90000),
+          }),
     () =>
-      new TencentTtsProvider({
-        secretId: process.env.TENCENTCLOUD_SECRET_ID ?? "",
-        secretKey: process.env.TENCENTCLOUD_SECRET_KEY ?? "",
-        voice: Number(process.env.TENCENT_TTS_VOICE || 101001),
-        speed: Number(process.env.TENCENT_TTS_SPEED || -0.5),
-        volume: Number(process.env.TENCENT_TTS_VOLUME || 0),
-        timeoutMs: Number(process.env.TENCENT_TTS_TIMEOUT_MS || 60000),
-      }),
+      config.probes && process.env.LAORENYUN_SPEECH_FIXTURE === "true"
+        ? fixtureTts
+        : new TencentTtsProvider({
+            secretId: process.env.TENCENTCLOUD_SECRET_ID ?? "",
+            secretKey: process.env.TENCENTCLOUD_SECRET_KEY ?? "",
+            voice: Number(process.env.TENCENT_TTS_VOICE || 101001),
+            speed: Number(process.env.TENCENT_TTS_SPEED || -0.5),
+            volume: Number(process.env.TENCENT_TTS_VOLUME || 0),
+            timeoutMs: Number(process.env.TENCENT_TTS_TIMEOUT_MS || 60000),
+          }),
   );
   await speech.initialize();
   ctx.effect(() => async () => {
@@ -107,6 +112,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       (e) =>
         e.type === "assistant/message" &&
         e.data.message.content.some((c) => c.type === "text") &&
+        !e.data.interrupted &&
         !e.data.message.content.some((c) => c.type === "tool-call"),
     );
     if (final?.type === "assistant/message" && agent.status === "idle") {

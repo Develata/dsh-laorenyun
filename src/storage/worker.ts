@@ -114,6 +114,21 @@ function handle(r: WorkerRequest): unknown {
         r.input,
       );
     case "recoverSpeech": {
+      // Journal recovery can register the original before source attachment committed.
+      for (const row of db
+        .prepare(
+          "SELECT m.json FROM media m JOIN sources s ON json_extract(m.json,'$.sourceId')=s.id WHERE s.media_id IS NULL AND s.status='draft' AND json_extract(m.json,'$.originalMediaId') IS NULL",
+        )
+        .all()) {
+        const media = JSON.parse(String(row.json)) as Media;
+        if (!media.sourceId) continue;
+        const v = source(media.sourceId);
+        db.prepare("UPDATE sources SET media_id=? WHERE id=?").run(
+          media.id,
+          v.id,
+        );
+        saveSource({ ...v, mediaId: media.id });
+      }
       db.exec(
         `UPDATE speech_attempts SET json=json_set(json,'$.state','interrupted','$.error','PROCESS_INTERRUPTED') WHERE json_extract(json,'$.state') IN ('normalizing','transcribing')`,
       );

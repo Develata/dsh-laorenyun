@@ -30,12 +30,12 @@ export function migrate(db: DatabaseSync): void {
       db.exec(
         "CREATE TABLE session_speakers(session_id TEXT PRIMARY KEY, json TEXT NOT NULL); PRAGMA user_version=2; COMMIT",
       );
-      migrate(db);
-      return;
     } catch (error) {
       db.exec("ROLLBACK");
       throw error;
     }
+    migrate(db);
+    return;
   }
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -54,9 +54,9 @@ export function migrate(db: DatabaseSync): void {
    PRAGMA user_version=2;
   `);
     db.exec("COMMIT");
-    migrate(db);
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   }
+  migrate(db);
 }
