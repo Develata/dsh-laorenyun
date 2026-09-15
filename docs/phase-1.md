@@ -48,6 +48,10 @@ Host 只处理 `role=user`、`source.kind=user` 且具有 DSH 浏览器 `rpcId` 
 
 此 DSH pin 只持久化 light/dark/system，注册自定义 theme ID 后 setTheme 会被异步 settings adoption 覆盖。使用官方 `overrideTokens` light/dark 层保持暖色，不监听事件强行抢回偏好；构建器初始设置 light/17px，保留已有设置。
 
+## Profile 展示隔离
+
+Host 的公开 state 返回 developer 布尔配置；Client 初始化读取一次，elder 使用官方 slot priority=-10 覆盖 system-prompt、turn-process 和 stats dock，dev 保留原件。ui-chat 来自 profile；其动态 keyed seat 在一个局部类型适配中声明，由 DSH SlotCore 运行时校验和真实浏览器验证。隐藏展示不是权限隔离；模型能力仍由发行 preset 的空工具集合控制。
+
 ## 已知 Phase 2 接口工作
 
 目前假 ASR 来源一次最多 32 MiB 完整写入；Phase 0 的分片上传、真正时间范围和 raw-ASR-attempt 实体留给 Phase 2。引用标记当前会显示在原生用户气泡/自动标题中：它是开发接入证明，Phase 2 应通过公开会话投影/renderer 隐藏展示层标记，仍保留原生日志中的 ID。不得仅为了美观删掉唯一关联信息。

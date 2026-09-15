@@ -22,7 +22,36 @@ export const inject = [
   "conversation",
   "locale",
 ];
-export function apply(ctx: Context): void {
+export async function apply(ctx: Context): Promise<void> {
+  const { developer } = await api<{ developer: boolean }>("state", {});
+  if (!developer) {
+    // ui-chat is supplied by the profile, not a plugin package dependency.
+    // These public dynamic seats are runtime-validated by DSH SlotCore.
+    const chatSlots = ctx.slots as unknown as {
+      inject(name: "conversation.chat.node", setup: () => () => void): unknown;
+      register(
+        options: {
+          name: "conversation.chat.node";
+          key: "system-prompt" | "turn-process";
+          priority: number;
+        },
+        view: () => null,
+      ): () => void;
+    };
+    for (const key of ["system-prompt", "turn-process"] as const)
+      chatSlots.inject("conversation.chat.node", () =>
+        chatSlots.register(
+          { name: "conversation.chat.node", key, priority: -10 },
+          () => null,
+        ),
+      );
+    ctx.slots.inject("conversation.composer.dock", () =>
+      ctx.slots.register(
+        { name: "conversation.composer.dock", id: "stats", priority: -10 },
+        () => null,
+      ),
+    );
+  }
   // Custom theme ids are not persisted by this DSH pin. Token layers survive
   // the asynchronous built-in preference adoption from Host settings.
   ctx.effect(() =>

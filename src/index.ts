@@ -21,10 +21,12 @@ import { FixtureLlm } from "./probes/llm.ts";
 export interface Config {
   dataDir: string;
   probes: boolean;
+  developer: boolean;
 }
 export const Config = z.object({
   dataDir: z.string().required(),
   probes: z.boolean().default(false),
+  developer: z.boolean().default(false),
 });
 export const inject = [
   "agents",
@@ -127,6 +129,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const sessionId = String(b.sessionId ?? "");
     return {
       probes: config.probes,
+      developer: config.developer,
       speaker: await app.db.call("getSessionSpeaker", sessionId),
       draft: sessionId ? await app.db.call("getDraft", sessionId) : null,
       branch: sessionId ? await app.db.call("getBranch", sessionId) : null,
