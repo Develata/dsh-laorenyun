@@ -657,4 +657,44 @@ test("native retention compacts only older balanced turn range through the publi
   assert.deepEqual(bounds, [1, 10]);
   assert.equal(next, 1);
   assert.equal(events.length, 21);
+  context.get = () => ({
+    compactRegion: async () => {
+      throw new Error("summary is not smaller than the shadowed content");
+    },
+  });
+  await listener!(
+    {
+      agent,
+      messages: [{ source: { kind: "user", rpcId: "short" } }],
+      signal: AbortSignal.timeout(500),
+    },
+    async () => {
+      next++;
+    },
+  );
+  assert.equal(next, 2);
+  // The bounded short-input fallback cannot hide a large-history failure.
+  const long = {
+    session: {
+      surface: { nodes: events.map((_, i) => i) },
+      eventAt: (i: number) => ({
+        ...events[i],
+        data: {
+          ...events[i]!.data,
+          content: [{ type: "text", text: "字".repeat(500) }],
+        },
+      }),
+    },
+  };
+  await assert.rejects(
+    listener!(
+      {
+        agent: long,
+        messages: [{ source: { kind: "user", rpcId: "long" } }],
+        signal: AbortSignal.timeout(500),
+      },
+      async () => {},
+    ),
+    /summary is not smaller/,
+  );
 });
