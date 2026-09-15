@@ -2,7 +2,7 @@
 
 老人云的 DeepSeek Harness 业务插件仓库。拥有语音、口述史采访编排、SQLite 时间记忆图、出处/冲突、记忆河流、人物表达和自传导出。
 
-**当前：Phase 1 可构建基础插件；真实采访与云语音留给后续阶段。** 完整应用与 Docker 发行由 [laorenyun](https://github.com/Develata/laorenyun) 拥有。基础包开发命令见下方，最终用户从应用仓库启动。
+**当前：Phase 2 真实语音与采访实现中；云端实测状态见 [Phase 2](docs/phase-2.md)。** 完整应用与 Docker 发行由 [laorenyun](https://github.com/Develata/laorenyun) 拥有。基础包开发命令见下方，最终用户从应用仓库启动。
 
 ## 按任务读取
 

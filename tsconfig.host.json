@@ -6,6 +6,8 @@
     "src/application.ts",
     "src/domain/**/*.ts",
     "src/probes/**/*.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "src/interviewer.ts",
+    "src/speech/**/*.ts"
   ]
 }

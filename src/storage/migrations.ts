@@ -1,7 +1,7 @@
 /** Only the worker imports SQLite; migrations are explicit and transactional. */
 import type { DatabaseSync } from "node:sqlite";
 import { DomainError } from "../domain/types.ts";
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export function migrate(db: DatabaseSync): void {
   const version = Number(db.prepare("PRAGMA user_version").get()?.user_version);
   if (version > SCHEMA_VERSION)
@@ -10,12 +10,27 @@ export function migrate(db: DatabaseSync): void {
       "database belongs to a newer application",
     );
   if (version === SCHEMA_VERSION) return;
+  if (version === 2) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.exec(`CREATE TABLE speech_attempts(id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES sources(id), json TEXT NOT NULL);
+      CREATE TABLE interviews(session_id TEXT PRIMARY KEY, json TEXT NOT NULL);
+      CREATE TABLE assistant_replies(session_id TEXT PRIMARY KEY, json TEXT NOT NULL);
+      CREATE TABLE receipts(transcript_id TEXT PRIMARY KEY REFERENCES transcripts(id), state TEXT NOT NULL);
+      PRAGMA user_version=3; COMMIT`);
+      return;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   if (version === 1) {
     db.exec("BEGIN IMMEDIATE");
     try {
       db.exec(
         "CREATE TABLE session_speakers(session_id TEXT PRIMARY KEY, json TEXT NOT NULL); PRAGMA user_version=2; COMMIT",
       );
+      migrate(db);
       return;
     } catch (error) {
       db.exec("ROLLBACK");
@@ -39,6 +54,7 @@ export function migrate(db: DatabaseSync): void {
    PRAGMA user_version=2;
   `);
     db.exec("COMMIT");
+    migrate(db);
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;

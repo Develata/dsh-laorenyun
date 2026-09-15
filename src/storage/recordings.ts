@@ -88,12 +88,32 @@ export class FileRecordingStore implements RecordingStore {
     mime: string,
     fixture: boolean,
     op: OperationContext,
+    metadata: Partial<
+      Pick<
+        Media,
+        "id" | "sourceId" | "originalMediaId" | "durationMs" | "capturedAt"
+      >
+    > = {},
   ): Promise<Media> {
     checkOperation(op);
     if (bytes.byteLength > 32 * 1024 * 1024)
       throw new DomainError("MEDIA_TOO_LARGE", "limit 32 MiB");
-    const id = randomUUID() as MediaId;
+    const id = metadata.id ?? (randomUUID() as MediaId);
+    if (!validId(id))
+      throw new DomainError("INVALID_MEDIA", "opaque media ID required");
+    const existing = metadata.id
+      ? await this.db.call("getMedia", id, op)
+      : null;
+    if (existing) {
+      if (
+        existing.sha256 !== digest(bytes) ||
+        existing.sourceId !== metadata.sourceId
+      )
+        throw new DomainError("IDEMPOTENCY_MISMATCH", "recording");
+      return existing;
+    }
     const media: Media = {
+      ...metadata,
       id,
       mime,
       fixture,

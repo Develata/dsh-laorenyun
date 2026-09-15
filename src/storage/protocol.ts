@@ -1,4 +1,9 @@
 import type {
+  SpeechAttempt,
+  InterviewState,
+  AssistantReply,
+} from "../domain/speech.ts";
+import type {
   Branch,
   HumanInput,
   Media,
@@ -9,6 +14,23 @@ import type {
   TranscriptSegment,
 } from "../domain/types.ts";
 export interface Operations {
+  attachRecording: {
+    input: { sourceId: SourceId; mediaId: string };
+    output: Source;
+  };
+  putAttempt: { input: SpeechAttempt; output: SpeechAttempt };
+  getAttempt: { input: SourceId; output: SpeechAttempt | null };
+  recoverSpeech: { input: null; output: null };
+  completeAsr: { input: { id: SourceId; text: string }; output: Source };
+  beginInterview: { input: InterviewState; output: InterviewState };
+  getInterview: { input: string; output: InterviewState | null };
+  putReply: { input: AssistantReply; output: AssistantReply };
+  getReply: { input: string; output: AssistantReply | null };
+  markReceipt: { input: { transcriptId: string; state: string }; output: null };
+  getReceipts: {
+    input: string;
+    output: { transcript: TranscriptSegment; state: string }[];
+  };
   getSessionSpeaker: { input: string; output: SpeakerIdentity };
   setSessionSpeaker: {
     input: { sessionId: string; speaker: SpeakerIdentity };

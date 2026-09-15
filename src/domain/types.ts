@@ -23,6 +23,10 @@ export interface Media {
   relativePath: string;
   createdAt: number;
   fixture: boolean;
+  originalMediaId?: MediaId;
+  sourceId?: SourceId;
+  durationMs?: number;
+  capturedAt?: number;
 }
 export interface Source {
   id: SourceId;
@@ -34,6 +38,7 @@ export interface Source {
   speaker: SpeakerIdentity;
   status: "draft" | "submitted" | "cancelled";
   createdAt: number;
+  recognition?: "pending" | "ready" | "failed";
 }
 export interface TranscriptSegment {
   id: string;

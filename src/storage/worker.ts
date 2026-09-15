@@ -1,3 +1,4 @@
+import type { SpeechAttempt, InterviewState } from "../domain/speech.ts";
 import { parentPort, workerData } from "node:worker_threads";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -75,6 +76,101 @@ function handle(r: WorkerRequest): unknown {
   if (Date.now() >= r.deadline)
     throw new DomainError("TIMEOUT", "queued database request expired");
   switch (r.method) {
+    case "attachRecording": {
+      const v = source(r.input.sourceId);
+      if (v.status !== "draft" || (v.mediaId && v.mediaId !== r.input.mediaId))
+        throw new DomainError("SOURCE_NOT_DRAFT", "recording association");
+      const media = read<Media>(
+        "SELECT json FROM media WHERE id=?",
+        r.input.mediaId,
+      );
+      if (!media || media.sourceId !== v.id)
+        throw new DomainError("INVALID_MEDIA", "source association");
+      db.prepare("UPDATE sources SET media_id=? WHERE id=?").run(
+        media.id,
+        v.id,
+      );
+      return saveSource({ ...v, mediaId: media.id });
+    }
+    case "putAttempt": {
+      const old = read<SpeechAttempt>(
+        "SELECT json FROM speech_attempts WHERE id=?",
+        r.input.id,
+      );
+      if (
+        old &&
+        (old.sourceId !== r.input.sourceId ||
+          ["succeeded", "failed", "interrupted"].includes(old.state))
+      )
+        throw new DomainError("IMMUTABLE_ATTEMPT", "attempt finalized");
+      db.prepare(
+        "INSERT INTO speech_attempts VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json",
+      ).run(r.input.id, r.input.sourceId, JSON.stringify(r.input));
+      return r.input;
+    }
+    case "getAttempt":
+      return read(
+        "SELECT json FROM speech_attempts WHERE source_id=? ORDER BY rowid DESC LIMIT 1",
+        r.input,
+      );
+    case "recoverSpeech": {
+      db.exec(
+        `UPDATE speech_attempts SET json=json_set(json,'$.state','interrupted','$.error','PROCESS_INTERRUPTED') WHERE json_extract(json,'$.state') IN ('normalizing','transcribing')`,
+      );
+      return null;
+    }
+    case "completeAsr": {
+      const v = source(r.input.id);
+      if (v.status !== "draft" || v.recognition === "ready")
+        throw new DomainError(
+          "REVISION_CONFLICT",
+          "recognition already adopted",
+        );
+      return saveSource({
+        ...v,
+        rawAsr: r.input.text,
+        draft: r.input.text,
+        draftRevision: v.draftRevision + 1,
+        recognition: "ready",
+      });
+    }
+    case "beginInterview": {
+      db.prepare("INSERT OR IGNORE INTO interviews VALUES(?,?)").run(
+        r.input.sessionId,
+        JSON.stringify(r.input),
+      );
+      return read<InterviewState>(
+        "SELECT json FROM interviews WHERE session_id=?",
+        r.input.sessionId,
+      );
+    }
+    case "getInterview":
+      return read("SELECT json FROM interviews WHERE session_id=?", r.input);
+    case "putReply":
+      db.prepare(
+        "INSERT INTO assistant_replies VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET json=excluded.json",
+      ).run(r.input.sessionId, JSON.stringify(r.input));
+      return r.input;
+    case "getReply":
+      return read(
+        "SELECT json FROM assistant_replies WHERE session_id=?",
+        r.input,
+      );
+    case "markReceipt":
+      db.prepare(
+        "INSERT INTO receipts VALUES(?,?) ON CONFLICT(transcript_id) DO UPDATE SET state=excluded.state",
+      ).run(r.input.transcriptId, r.input.state);
+      return null;
+    case "getReceipts":
+      return db
+        .prepare(
+          "SELECT t.json,COALESCE(r.state,'domain-accepted') state FROM transcripts t LEFT JOIN receipts r ON r.transcript_id=t.id WHERE session_id=? ORDER BY t.rowid DESC LIMIT 10",
+        )
+        .all(r.input)
+        .map((v) => ({
+          transcript: JSON.parse(String(v.json)),
+          state: String(v.state),
+        }));
     case "getSessionSpeaker":
       return (
         read(

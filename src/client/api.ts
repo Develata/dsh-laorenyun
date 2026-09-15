@@ -3,6 +3,7 @@ export async function api<T>(
   method: string,
   body: object,
   signal?: AbortSignal,
+  timeoutMs = 10000,
 ): Promise<T> {
   const response = await fetch(`/api/laorenyun/${method}`, {
     method: "POST",
@@ -10,8 +11,8 @@ export async function api<T>(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
-      : AbortSignal.timeout(10000),
+      ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs),
   });
   const result = (await response.json()) as {
     ok: boolean;

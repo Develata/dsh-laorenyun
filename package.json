@@ -19,14 +19,19 @@
       "types": "./lib/types/client/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./interviewer": {
+      "types": "./lib/types/host/interviewer.d.ts",
+      "default": "./lib/interviewer.js"
+    }
   },
   "files": [
     "lib",
     "cordis.patch.yml",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
-    "README.md"
+    "README.md",
+    "skills"
   ],
   "dsh": {
     "bundle": {
@@ -51,9 +56,9 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/schemastery": "3.18.2",
     "@deepseek-ai/dsh-llm": "0.1.6-alpha.1",
-    "@deepseek-ai/dsh-session": "0.1.6-alpha.1"
+    "@deepseek-ai/dsh-session": "0.1.6-alpha.1",
+    "@deepseek-ai/schemastery": "3.18.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
@@ -80,5 +85,9 @@
     "prettier": "3.6.2",
     "react": "18.3.1",
     "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "tencentcloud-sdk-nodejs-common": "4.1.220",
+    "tencentcloud-sdk-nodejs-tts": "4.1.237"
   }
 }

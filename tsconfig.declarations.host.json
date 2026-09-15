@@ -7,5 +7,5 @@
     "rootDir": "src",
     "outDir": "lib/types/host"
   },
-  "include": ["src/index.ts"]
+  "include": ["src/index.ts", "src/interviewer.ts"]
 }
