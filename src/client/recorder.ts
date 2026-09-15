@@ -1,4 +1,10 @@
 import { MAX_AUDIO_BYTES, MAX_RECORDING_MS } from "../domain/speech.ts";
+export type CaptureIssue = "size-limit" | "recorder-error" | "stop-timeout";
+export interface CapturedRecording {
+  blob: Blob;
+  durationMs: number;
+  incomplete?: CaptureIssue;
+}
 export type CaptureState = "idle" | "permission" | "recording" | "stopping";
 /** Owns one recorder, bounded chunks, permission race and all device resources. */
 export class Capture {
@@ -10,10 +16,8 @@ export class Capture {
   private started = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
   private generation = 0;
-  private complete:
-    | ((value: { blob: Blob; durationMs: number }) => void)
-    | null = null;
-  private failed: ((error: Error) => void) | null = null;
+  private complete: ((value: CapturedRecording) => void) | null = null;
+  private incomplete: CaptureIssue | undefined;
   private update: (seconds: number, warning: boolean) => void;
   private autoStop: () => void;
   constructor(
@@ -69,32 +73,30 @@ export class Capture {
       );
       this.parts = [];
       this.size = 0;
+      this.incomplete = undefined;
       this.started = Date.now();
       this.recorder.ondataavailable = (e) => {
         if (e.data.size) {
-          this.size += e.data.size;
-          if (this.size > MAX_AUDIO_BYTES) {
-            this.failed?.(new Error("录音超过大小限制，请缩短本段"));
-            this.dispose();
-            return;
+          const remaining = MAX_AUDIO_BYTES - this.size;
+          const part =
+            e.data.size <= remaining ? e.data : e.data.slice(0, remaining);
+          if (part.size) {
+            this.parts.push(part);
+            this.size += part.size;
           }
-          this.parts.push(e.data);
+          if (e.data.size > remaining) this.incomplete = "size-limit";
+          if (this.size >= MAX_AUDIO_BYTES && this.state === "recording")
+            this.autoStop();
         }
       };
       this.recorder.onerror = () => {
         // MediaRecorder delivers final dataavailable/stop after an error.
         // Enter the same preservation path instead of discarding collected evidence.
+        this.incomplete = "recorder-error";
         if (this.state === "recording") this.autoStop();
       };
       this.recorder.onstop = () => {
-        const durationMs = Math.min(
-          Date.now() - this.started,
-          MAX_RECORDING_MS,
-        );
-        const blob = new Blob(this.parts, {
-          type: this.recorder?.mimeType || mime || "audio/webm",
-        });
-        this.complete?.({ blob, durationMs });
+        this.complete?.(this.snapshot());
         this.release();
       };
       this.recorder.start(1000);
@@ -114,25 +116,35 @@ export class Capture {
       clearTimeout(timeout);
     }
   }
-  stop(): Promise<{ blob: Blob; durationMs: number }> {
+  stop(): Promise<CapturedRecording> {
     if (this.state !== "recording" || !this.recorder)
       return Promise.reject(new Error("尚未开始录音"));
     this.state = "stopping";
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
+        this.incomplete = "stop-timeout";
+        const value = this.snapshot();
         this.dispose();
-        reject(new Error("录音结束超时"));
+        resolve(value);
       }, 5000);
       this.complete = (v) => {
         clearTimeout(timer);
         resolve(v);
       };
-      this.failed = (e) => {
-        clearTimeout(timer);
-        reject(e);
-      };
       if (this.recorder!.state !== "inactive") this.recorder!.stop();
     });
+  }
+  private snapshot(): CapturedRecording {
+    return {
+      blob: new Blob(this.parts, {
+        type: this.recorder?.mimeType || "audio/webm",
+      }),
+      durationMs: Math.max(
+        1,
+        Math.min(Date.now() - this.started, MAX_RECORDING_MS),
+      ),
+      ...(this.incomplete ? { incomplete: this.incomplete } : {}),
+    };
   }
   private release() {
     clearInterval(this.timer);

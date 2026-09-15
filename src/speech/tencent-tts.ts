@@ -60,6 +60,7 @@ export class TencentTtsProvider implements TextToSpeechProvider {
       config.speed > 6 ||
       !Number.isFinite(config.volume) ||
       Math.abs(config.volume) > 10 ||
+      !Number.isFinite(config.timeoutMs) ||
       config.timeoutMs < 1000 ||
       config.timeoutMs > 120000
     )

@@ -363,6 +363,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
               duration > MAX_RECORDING_MS + 2000
             )
               throw new DomainError("INVALID_INPUT", "recording duration");
+            const incomplete = request.headers.get("x-capture-incomplete");
+            if (
+              incomplete &&
+              !["size-limit", "recorder-error", "stop-timeout"].includes(
+                incomplete,
+              )
+            )
+              throw new DomainError("INVALID_INPUT", "recording completeness");
             const op = speech.context(60000);
             const signal = AbortSignal.any([request.signal, op.signal]);
             const bytes = await boundedBody(
@@ -377,6 +385,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
               sourceId: id,
               durationMs: duration,
               capturedAt: source.createdAt,
+              ...(incomplete
+                ? {
+                    captureIncomplete: incomplete as
+                      | "size-limit"
+                      | "recorder-error"
+                      | "stop-timeout",
+                  }
+                : {}),
             });
             const result = await app.db.call("attachRecording", {
               sourceId: id,

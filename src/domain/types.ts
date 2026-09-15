@@ -27,6 +27,7 @@ export interface Media {
   sourceId?: SourceId;
   durationMs?: number;
   capturedAt?: number;
+  captureIncomplete?: "size-limit" | "recorder-error" | "stop-timeout";
 }
 export interface Source {
   id: SourceId;

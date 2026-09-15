@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Capture } from "../src/client/recorder.ts";
 import { Playback } from "../src/client/playback.ts";
-test("MediaRecorder permission failure, double start, stop and track cleanup", async () => {
+test("MediaRecorder permission failure, double start, stop and track cleanup", async (t) => {
   let stops = 0;
   const originalNav = Object.getOwnPropertyDescriptor(globalThis, "navigator");
   const originalRecorder = Object.getOwnPropertyDescriptor(
@@ -10,6 +10,10 @@ test("MediaRecorder permission failure, double start, stop and track cleanup", a
     "MediaRecorder",
   );
   class FakeRecorder {
+    static last: FakeRecorder;
+    constructor() {
+      FakeRecorder.last = this;
+    }
     static isTypeSupported(t: string) {
       return t.includes("webm");
     }
@@ -67,6 +71,22 @@ test("MediaRecorder permission failure, double start, stop and track cleanup", a
     assert.equal(await captured.blob.text(), "fixture");
     assert.equal(stops, 1);
     assert.equal(recorder.state, "idle");
+    await recorder.start();
+    FakeRecorder.last.ondataavailable?.({
+      data: new Blob(["preserved partial"]),
+    });
+    FakeRecorder.last.stop = () => {
+      FakeRecorder.last.state = "inactive";
+    };
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const delayed = recorder.stop();
+    t.mock.timers.tick(5000);
+    const partial = await delayed;
+    assert.equal(await partial.blob.text(), "preserved partial");
+    assert.equal(partial.incomplete, "stop-timeout");
+    assert.equal(recorder.state, "idle");
+    assert.equal(stops, 2);
+    t.mock.timers.reset();
   } finally {
     if (originalNav)
       Object.defineProperty(globalThis, "navigator", originalNav);

@@ -446,6 +446,7 @@ export async function apply(ctx: Context): Promise<void> {
           headers: {
             "Content-Type": v.blob.type,
             "x-duration-ms": String(v.durationMs),
+            ...(v.incomplete ? { "x-capture-incomplete": v.incomplete } : {}),
           },
           body: v.blob,
           signal: AbortSignal.any([
@@ -459,6 +460,12 @@ export async function apply(ctx: Context): Promise<void> {
       await pendingRecording(sessionId, null);
       setPending(null);
       setSource(result.value);
+      if (v.incomplete) {
+        report(
+          "录音意外中断，已保存收到的部分。您可以重新识别，或取消这份草稿后重新录音。",
+        );
+        return;
+      }
       await recognize(result.value);
     };
     const startRecording = () =>

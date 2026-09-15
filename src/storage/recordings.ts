@@ -91,7 +91,12 @@ export class FileRecordingStore implements RecordingStore {
     metadata: Partial<
       Pick<
         Media,
-        "id" | "sourceId" | "originalMediaId" | "durationMs" | "capturedAt"
+        | "id"
+        | "sourceId"
+        | "originalMediaId"
+        | "durationMs"
+        | "capturedAt"
+        | "captureIncomplete"
       >
     > = {},
   ): Promise<Media> {

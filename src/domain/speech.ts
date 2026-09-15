@@ -8,6 +8,7 @@ export interface AsrResult {
   requestId: string;
   latencyMs: number;
   durationMs?: number;
+  /** Milliseconds on normalized input; original recording alignment is not asserted. */
   segments: { text: string; startMs: number; endMs: number }[];
 }
 export interface SpeechToTextProvider {

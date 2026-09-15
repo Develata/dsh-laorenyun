@@ -83,6 +83,16 @@ test("Flash neutral result, provider errors, malformed response and bounded time
   ] as const)
     assert.throws(() => parseFlash({ code }, "x", 0), new RegExp(expected));
   assert.throws(() => parseFlash({}, "x", 0), /MALFORMED_RESPONSE/);
+  for (const sentence_list of [{}, [null]])
+    assert.throws(
+      () =>
+        parseFlash(
+          { ...result, flash_result: [{ text: "x", sentence_list }] },
+          "x",
+          0,
+        ),
+      /MALFORMED_RESPONSE/,
+    );
   const provider = new TencentFlashAsrProvider(config, async () =>
     Response.json(result),
   );
@@ -204,7 +214,15 @@ test("original -> derivative -> attempt -> draft survives reopen, retry and corr
       throw new Error("unused");
     });
     await service.initialize();
-    await service.reserve("s", id);
+    const reservations = await Promise.allSettled([
+      service.reserve("s", id),
+      service.reserve("s", randomUUID() as SourceId),
+    ]);
+    assert.equal(
+      reservations.filter((r) => r.status === "fulfilled").length,
+      1,
+    );
+    assert.equal((await app.db.call("getDraft", "s"))?.id, id);
     const media = await app.recordings.write(
       await readFile(join(root, "input.webm")),
       "audio/webm",

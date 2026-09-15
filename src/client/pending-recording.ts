@@ -4,6 +4,7 @@ export interface PendingRecording {
   sourceId: string;
   blob: Blob;
   durationMs: number;
+  incomplete?: "size-limit" | "recorder-error" | "stop-timeout";
 }
 export async function pendingRecording(
   sessionId: string,

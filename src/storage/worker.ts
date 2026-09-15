@@ -235,6 +235,13 @@ function handle(r: WorkerRequest): unknown {
       return read<Media>("SELECT json FROM media WHERE id=?", r.input);
     case "createSource":
       speaker(r.input.speaker);
+      if (
+        read(
+          "SELECT json FROM sources WHERE session_id=? AND status='draft'",
+          r.input.sessionId,
+        )
+      )
+        throw new DomainError("DRAFT_EXISTS", "finish existing source draft");
       db.prepare("INSERT INTO sources VALUES(?,?,?,?,?)").run(
         r.input.id,
         r.input.sessionId,

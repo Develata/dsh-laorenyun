@@ -58,8 +58,13 @@ export function parseFlash(
   if (text.length > 16000)
     throw new DomainError("SIZE_LIMIT", "ASR transcript");
   const segments: AsrResult["segments"] = [];
-  for (const s of results[0].sentence_list ?? []) {
+  const sentences = results[0].sentence_list ?? [];
+  if (!Array.isArray(sentences))
+    throw new DomainError("MALFORMED_RESPONSE", "ASR sentence list");
+  for (const s of sentences) {
     if (
+      !s ||
+      typeof s !== "object" ||
       typeof s.text !== "string" ||
       !Number.isFinite(s.start_time) ||
       !Number.isFinite(s.end_time) ||
