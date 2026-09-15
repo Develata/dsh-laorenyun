@@ -28,6 +28,10 @@ Owner：插件实现/契约。状态：代码与离线门禁已实现；真实�
 
 ## 当前离线证据
 
-`pnpm check`：Host/Client typecheck、16 tests、declaration/esbuild通过。原Phase1七项回归保留（schema版本断言更新）；真实FFmpeg生成WebM/Opus测试，检查PCM属性与失败/超时；Flash固定HMAC fixture由独立Python hmac计算，不冒称官方掩码示例可复算。腾讯实网、真人麦克风、地区口音暂无通过证据。
+`pnpm check`：Host/Client typecheck、16 tests、declaration/esbuild通过。原Phase1七项回归保留（schema版本断言更新）；真实FFmpeg生成WebM/Opus测试，检查PCM属性与失败/超时；Flash固定HMAC fixture由独立Python hmac计算，不冒称官方掩码示例可复算。腾讯实网结果统一见下方应用证据链接；真人麦克风、地区口音尚无通过证据。
 
 发行与最终真实Compose/浏览器证据由应用库 [Phase2](https://github.com/Develata/laorenyun/blob/main/docs/phase-2.md) 维护。对抗审查已修复：按原生真人新增事件驱动TTS、固定录音Source归属、复用失败识别的派生物、避免轮询重复写reply、录音stop超时保留已有块并标captureIncomplete、worker原子阻止并发draft、移除旧模块文档预算。剩余实网/实体设备验收不可由离线测试关闭。
+
+## Phase 2.5 配置修正
+
+Host及显式cloud-smoke脚本的缺省引擎改为16k_zh，匹配应用ADR-0006与已验证普通Flash免费包；TENCENT_ASR_ENGINE仍可显式覆盖，无自动降级。固定16k_zh_en的签名/解析测试保留，继续验证可选引擎支持。真实R1–R3门禁由应用现有Phase2报告统一记录，不在本库重复声明通过。

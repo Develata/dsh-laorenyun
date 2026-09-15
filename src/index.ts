@@ -59,7 +59,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             appId: process.env.TENCENTCLOUD_APP_ID ?? "",
             secretId: process.env.TENCENTCLOUD_SECRET_ID ?? "",
             secretKey: process.env.TENCENTCLOUD_SECRET_KEY ?? "",
-            engine: process.env.TENCENT_ASR_ENGINE || "16k_zh_en",
+            engine: process.env.TENCENT_ASR_ENGINE || "16k_zh",
             timeoutMs: Number(process.env.TENCENT_ASR_TIMEOUT_MS || 90000),
           }),
     () =>

@@ -16,7 +16,7 @@ FFmpeg只接收固定本地输入/输出，无shell、无用户选项/URL，容�
 
 [官方极速版接口](https://cloud.tencent.com/document/product/1093/52097)：同步HTTPS POST；固定 `asr.cloud.tencent.com/asr/flash/v1/<appid>`。Node fetch + crypto，无Python/额外Flash SDK。原始参数按key排序，`POST+host/path?query` 做 HMAC-SHA1/Base64，URL值单独percent-encode，签名在Authorization。URL含SecretId，禁止日志记录整条请求。
 
-默认16k_zh_en、WAV、first_channel_only=1、speaker_diarization=0、保留口语/标点/数字（filter_*和convert_num_mode=0）、word_info=2。引擎可配置；方言效果必须实测，不能由引擎名称推出准确率。
+演示/未配置引擎默认16k_zh、WAV、first_channel_only=1、speaker_diarization=0、保留口语/标点/数字（filter_*和convert_num_mode=0）、word_info=2。引擎可配置；16k_zh_en仍可显式选择，使用独立大模型额度，不自动回退。默认调整依据为应用ADR-0006中的普通免费包实测。方言效果必须实测，不能由引擎名称推出准确率。
 
 JSON响应≤2MiB，code=0后校验中立结果：text、可用segments、requestId、engine、latency。ASR文本≤16000字符。区分配置、限流、超时、音频、拒绝、网络和格式错误；错误不回显请求/密钥。时间/引擎权限在首次实际调用还需验证。
 

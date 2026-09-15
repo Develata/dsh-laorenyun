@@ -47,7 +47,7 @@ try {
         secretId,
         secretKey,
         appId: process.env.TENCENTCLOUD_APP_ID ?? "",
-        engine: process.env.TENCENT_ASR_ENGINE || "16k_zh_en",
+        engine: process.env.TENCENT_ASR_ENGINE || "16k_zh",
         timeoutMs: 90000,
       });
       const result = await asr.transcribe(wav, operation(95000));
