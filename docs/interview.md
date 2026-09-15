@@ -1,6 +1,6 @@
 # 采访接入
 
-Owner：插件DSH边界与恢复。行为规范见[应用03](https://github.com/Develata/laorenyun/blob/main/docs/03-interview-agent.md)；当前实现证据见[phase-2](phase-2.md)。
+Owner：插件DSH边界与恢复。行为规范见[应用03](https://github.com/Develata/laorenyun/blob/main/docs/03-interview-agent.md)；当前实现证据见[phase-3](phase-3.md)，语音边界见[phase-2](phase-2.md)。
 
 ## Main 与技能
 

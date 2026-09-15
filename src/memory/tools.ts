@@ -195,8 +195,16 @@ export function installMemoryTools(ctx: Context) {
     parameters: {
       type: "object",
       properties: {
-        boundary: { type: "boolean" },
-        userChoseTopic: { type: "boolean" },
+        boundary: {
+          type: "boolean",
+          description:
+            "当前话题自然结束且没有必要继续追问时填true；false只返回继续当前线索。",
+        },
+        userChoseTopic: {
+          type: "boolean",
+          description:
+            "用户已经明确选择了下一个内容时填true；只是请采访者选年代则false。",
+        },
         currentMonth: { type: ["integer", "null"] },
       },
       required: ["boundary", "userChoseTopic", "currentMonth"],

@@ -54,6 +54,7 @@ export function parseMemo(text: string, i: MemoInput): BranchMemo {
       throw new DomainError("INVALID_MEMO", "array bounds");
   if (
     v.source_turns.length !== i.sourceTurns.length ||
+    new Set(v.source_turns).size !== v.source_turns.length ||
     v.source_turns.some((id) => !i.sourceTurns.includes(id)) ||
     v.related_memory_nodes.some((id) => !i.relatedNodes.includes(id)) ||
     v.new_memory_candidates.length ||

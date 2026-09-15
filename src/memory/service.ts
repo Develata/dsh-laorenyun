@@ -42,6 +42,9 @@ export class MemoryService {
       try {
         await this.process(input);
       } catch (error) {
+        // Shutdown is an interruption, not a permanent extraction failure.
+        // Preserve running/proposed so startup reconciliation can resume it.
+        if (this.controller.signal.aborted) return;
         await this.db.call("memoryFail", {
           id: input.operation.id,
           code: error instanceof DomainError ? error.code : "EXTRACTION_FAILED",

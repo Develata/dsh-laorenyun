@@ -239,6 +239,35 @@ test("semantic duplicate cannot become a second event when unsafe to merge", asy
     await db.close();
   }
 });
+test("possible conflict from added detail remains candidate without noisy open Conflict", async () => {
+  const db = await DomainDatabase.open(await temp());
+  try {
+    const a = await human(db, "王老师常在放学后帮我补习数学，他总是很耐心。"),
+      id = (await apply(db, proposal(a))).nodeIds[0]!;
+    const b = await human(db, "我每周三放学后去王老师家补数学。");
+    const next = await apply(db, proposal(b), {
+      comparisons: [
+        {
+          proposal: 0,
+          nodeId: id,
+          revision: 1,
+          verdict: "possible_conflict",
+          explanation: "无法确认同一事件",
+        },
+      ],
+    });
+    assert.equal(
+      (await db.call("timeline", { method: "get_conflicts" })).items.length,
+      0,
+    );
+    assert.equal(
+      ((await db.call("getMemory", next.nodeIds[0]!)) as GraphNode).status,
+      "candidate",
+    );
+  } finally {
+    await db.close();
+  }
+});
 test("material historical conflict and explicit clarification preserve both revisions", async () => {
   const db = await DomainDatabase.open(await temp());
   try {
@@ -443,6 +472,18 @@ test("real branch states: proposal != consent, five human answers enter closing;
         inputRevision: 5,
       };
     assert.throws(() => parseMemo("{}", input), /INVALID_MEMO/);
+    assert.throws(
+      () =>
+        parseMemo(
+          JSON.stringify({
+            ...partialMemo(input),
+            status: "complete",
+            source_turns: Array(5).fill(input.sourceTurns[0]),
+          }),
+          input,
+        ),
+      /INVALID_MEMO/,
+    );
     await db.call("branchMemo", {
       sessionId: b.sessionId,
       memo: partialMemo(input),
@@ -729,4 +770,73 @@ test("native retention compacts only older balanced turn range through the publi
     ),
     /summary is not smaller/,
   );
+});
+
+test("graceful extraction cancellation resumes after restart exactly once", async () => {
+  const { MemoryService } = await import("../src/memory/service.ts");
+  const root = await temp();
+  let db = await DomainDatabase.open(root);
+  const t = await human(db, "1978年，我到合肥读书。");
+  let started!: () => void;
+  const entered = new Promise<void>((r) => {
+    started = r;
+  });
+  const interrupted = {
+    extract: async (_route: unknown, _input: unknown, signal: AbortSignal) => {
+      started();
+      return new Promise((_, reject) =>
+        signal.addEventListener(
+          "abort",
+          () => reject(new Error("interrupted")),
+          { once: true },
+        ),
+      );
+    },
+  };
+  const service = new MemoryService(
+    db,
+    interrupted as unknown as import("../src/memory/model.ts").InternalModel,
+    async () => ({ provider: "fixture", model: "fixture" }),
+    () => {},
+  );
+  await service.start();
+  await entered;
+  await service.close();
+  await db.close();
+  db = await DomainDatabase.open(root);
+  const completed = {
+    extract: async () => ({
+      value: {
+        proposals: [proposal(t, time(1978))],
+        comparisons: [],
+        resolutions: [],
+      },
+      evidence: { model: "fixture", latencyMs: 1, repairs: 0 },
+    }),
+  };
+  const resumed = new MemoryService(
+    db,
+    completed as unknown as import("../src/memory/model.ts").InternalModel,
+    async () => ({ provider: "fixture", model: "fixture" }),
+    () => {},
+  );
+  try {
+    await resumed.start();
+    const deadline = Date.now() + 2000;
+    while (
+      Date.now() < deadline &&
+      (await db.call("timeline", { method: "overview" })).items.length === 0
+    )
+      await new Promise((r) => setTimeout(r, 10));
+    await resumed.close();
+    assert.equal(
+      (await db.call("timeline", { method: "overview" })).items.length,
+      1,
+    );
+    assert.equal((await db.call("listTranscripts", "main")).length, 1);
+    assert.equal(await db.call("memoryClaim", null), null);
+  } finally {
+    await resumed.close();
+    await db.close();
+  }
 });

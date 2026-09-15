@@ -468,13 +468,11 @@ export class GraphStorage {
           placement: p.time.start === null ? "drifting" : "anchored",
           transcriptId: t.id,
           basis: p.basis,
-          status: comparisons.some(
-            (c) =>
-              c.verdict === "material_conflict" ||
-              c.verdict === "possible_conflict",
-          )
+          status: comparisons.some((c) => c.verdict === "material_conflict")
             ? "disputed"
-            : status,
+            : comparisons.some((c) => c.verdict === "possible_conflict")
+              ? "candidate"
+              : status,
           people: p.people.map((e) => this.entity("people", e, allowedPeople)),
           places: p.places.map((e) => this.entity("places", e, allowedPlaces)),
           evidence: [...(old?.evidence ?? []), ...p.evidence],
@@ -488,8 +486,8 @@ export class GraphStorage {
         ids.push(n.id);
         for (const e of p.edges)
           this.edge(n.id, e.to, e.kind, e.evidence, transcripts);
-        for (const c of comparisons.filter((c) =>
-          ["material_conflict", "possible_conflict"].includes(c.verdict),
+        for (const c of comparisons.filter(
+          (c) => c.verdict === "material_conflict",
         )) {
           if (c.nodeId === n.id)
             throw new DomainError("INVALID_CONFLICT", "same claim");
