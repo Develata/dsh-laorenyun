@@ -1,0 +1,9 @@
+# Private runtime data and local credentials
+.env
+.env.*
+!.env.example
+data/
+*.log
+node_modules/
+dist/
+.codegraph/
