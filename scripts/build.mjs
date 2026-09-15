@@ -70,6 +70,17 @@ async function notices(name, resolver) {
   for (const entry of await readdir(dir))
     if (/^(licen[cs]e|notice|copying)/i.test(entry))
       await copyFile(join(dir, entry), join(dest, entry));
+  if ((await readdir(dest)).length === 0) {
+    if (pkg.name === "tr46" && pkg.version === "0.0.3") {
+      await copyFile("licenses/tr46/LICENSE.md", join(dest, "LICENSE.md"));
+      await copyFile("licenses/tr46/README.md", join(dest, "PROVENANCE.md"));
+    } else {
+      const readme = await readFile(join(dir, "README.md"), "utf8");
+      if (!readme.includes("Permission is hereby granted"))
+        throw new Error("Missing full license: " + pkg.name);
+      await writeFile(join(dest, "README.md"), readme);
+    }
+  }
   const child = createRequire(manifest);
   for (const dependency of Object.keys(pkg.dependencies ?? {}))
     await notices(dependency, child);
