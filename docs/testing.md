@@ -1,5 +1,7 @@
 # 插件验证映射
 
+> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+
 Owner：本文件拥有模块级验证；产品验收ID及性能目标在[应用01](https://github.com/Develata/laorenyun/blob/main/docs/01-scope-and-acceptance.md)与[11](https://github.com/Develata/laorenyun/blob/main/docs/11-testing-strategy.md)。当前仅文档，下面测试均为未来要求。
 
 | 层/目标 | 必须覆盖 | 关联验收 |

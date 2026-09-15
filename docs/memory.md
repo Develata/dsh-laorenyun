@@ -1,5 +1,7 @@
 # SQLite与文件权威
 
+> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+
 Owner：本文件拥有存储映射和恢复协议。领域词汇见[应用04](https://github.com/Develata/laorenyun/blob/main/docs/04-memory-graph.md)，来源语义见[07](https://github.com/Develata/laorenyun/blob/main/docs/07-provenance-and-integrity.md)。
 
 ## SQLite选择

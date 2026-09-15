@@ -7,3 +7,7 @@ data/
 node_modules/
 dist/
 .codegraph/
+lib/
+*.tsbuildinfo
+*.tgz
+artifacts/

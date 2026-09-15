@@ -1,6 +1,6 @@
 # dsh-laorenyun — 业务插件
 
-始终中文交流。当前 Phase 0 是文档/接口设计；后续实现需新任务授权，不把接口草图当生产代码。
+始终中文交流。当前处于 Phase 1 基础实现；Phase 0 文档中的后续接口不能当作已实现功能。先读 docs/phase-1.md 获取实际证据。
 
 先读 [README路由](README.md)、[architecture](docs/architecture.md)、[应用不变量](https://github.com/Develata/laorenyun/blob/main/docs/02-architecture.md)，然后当前模块 contract/testing。跨库本地路径 `../laorenyun/`。
 
@@ -13,4 +13,4 @@
 - 有 `.codegraph/` 时理解代码先用 CodeGraph；Markdown用rg。保留任务外改动，不自行push/发布/大量清理。
 - 按变更运行验证并查看实际输出，最终必须写 `验证：...`；区分设计、fixture、真实API、运行和发布。
 
-未来包必须可独立 install/typecheck/test/build/pack，不依赖 sibling 源码；DSH集成测试可显式使用固定上游构建。暂不建立未可运行的 package.json/scripts。
+包必须可独立 install/typecheck/test/build/pack，不依赖 sibling 源码；DSH集成测试可显式使用固定上游构建。执行 pnpm typecheck、pnpm test、pnpm build 与 git diff --check；分面编译，不将 Host/Client Context 放入一个程序。

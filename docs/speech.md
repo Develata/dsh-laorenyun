@@ -1,5 +1,7 @@
 # 腾讯语音适配与有限等待
 
+> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+
 Owner：本文件拥有 provider映射、budget、上传/重试状态。产品语义见[应用05](https://github.com/Develata/laorenyun/blob/main/docs/05-speech-pipeline.md)，类型见[contracts](contracts.md)。ASR选择依据是用户给出的入门/SDK/V2文档及其链接的[极速版接口](https://cloud.tencent.com/document/product/1093/52097)。
 
 ## ASR：Flash文件识别，Host-only

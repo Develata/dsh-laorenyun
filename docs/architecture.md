@@ -1,5 +1,7 @@
 # 插件模块与 DSH 适配
 
+> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+
 Owner：本文件拥有未来代码组织。产品/领域权威见[应用架构](https://github.com/Develata/laorenyun/blob/main/docs/02-architecture.md)；上游版本/源码证据只在[账本](https://github.com/Develata/laorenyun/blob/main/docs/research/upstream.md)。以下目录是设计，不是现存 runtime。
 
 ```text

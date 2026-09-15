@@ -1,5 +1,7 @@
 # 采访实现边界
 
+> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+
 Owner：本文件拥有DSH接入和失败收敛，行为与调度公式唯一见[应用03](https://github.com/Develata/laorenyun/blob/main/docs/03-interview-agent.md)。
 
 ## 组合

@@ -1,5 +1,7 @@
 # 插件与发行层接口
 
+> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+
 Owner：本文件拥有插件产物、注入配置和关闭契约；Docker/env/权限/备份细节只在[应用部署](https://github.com/Develata/laorenyun/blob/main/docs/10-deployment.md)。
 
 未来产物：一个固定版本npm tarball（Host JS+types、Client bundle、Typert descriptors、只读skills和必要静态CSS），附license/notice。不能运行时从GitHub main下载，也不能要求相邻应用源码才能pack。插件测试使用DSH精确peer/dev版本；发行manifest记录完整DSH commit和插件tarball hash。

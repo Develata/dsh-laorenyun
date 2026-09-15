@@ -1,6 +1,8 @@
 # 领域、提供者与应用契约
 
-Owner：本文件唯一拥有未来 TypeScript 形状、错误/幂等和工具语义。**设计草图 v1，非已发布 API；无运行实现。** 产品语义、阈值与许可分别链接对应 owner。
+> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+
+Owner：本文件唯一拥有未来 TypeScript 形状、错误/幂等和工具语义。**完整目标草图 v1；Phase 1 已实现的窄子集见上方源码。** 产品语义、阈值与许可分别链接对应 owner。
 
 ## 通用规则
 

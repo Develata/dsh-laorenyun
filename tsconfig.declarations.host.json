@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.host.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": "lib/types/host"
+  },
+  "include": ["src/index.ts"]
+}

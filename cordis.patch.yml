@@ -1,0 +1,6 @@
+- insert:
+    - id: laorenyun
+      name: dsh-laorenyun
+      config:
+        dataDir: !!js process.env.LAORENYUN_DATA_DIR || '/app/data'
+        probes: !!js process.env.LAORENYUN_PROFILE === 'laorenyun-dev' && process.env.LAORENYUN_PROBES === 'true'
