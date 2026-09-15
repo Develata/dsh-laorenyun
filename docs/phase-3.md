@@ -33,3 +33,5 @@ BranchMemo.new_memory_candidates 当前固定空数组：每条真实支线答�
 固定版DSH的普通sessionController.resolveAgent拒绝subagent所有权；插件按领域父子绑定验证后，活跃child读agents.get，冷child使用公开inspect，真人输入通过原生subagent prompt恢复。老人slot隐藏tool-call/result及无RPC初始化消息，避免内部JSON成为口述历史。Main保留最近约8轮原话，超出时调用已装载的公开compaction.compactRegion；原生日志不删除，摘要不进入抽取证据。压缩失败显式报错，证言不回滚；不绕过DSH重写模型请求。
 
 冲突澄清会给两端各追加修订：选中端恢复confirmed/candidate，另一端superseded，旧revision与证言永远保留。Conflict两端ID/修订属于内部任务有界输入；一并校验，避免遗漏非词面匹配的一侧。只澄清时不重复造新事件。Memo记录模型耗时/格式修复次数。
+
+压缩服务由应用采访preset的隔离组装载，interviewer显式依赖compaction；只修改上层preset，不修改DSH代码。已持久提案冷恢复保持原graphRevision/白名单，CAS失败进入有界重抽取。

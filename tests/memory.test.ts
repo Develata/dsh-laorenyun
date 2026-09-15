@@ -195,9 +195,15 @@ test("evidence, inference, drifting, anchor revision, replay, restart and CAS", 
     );
     await db.close();
     db = await DomainDatabase.open(root);
+    const replay = (await db.call("memoryClaim", null))!;
+    assert.equal(
+      replay.operation.graphRevision,
+      recovered.operation.graphRevision,
+    );
+    assert.equal(replay.operation.attempts, recovered.operation.attempts);
     await db.call("memoryApply", {
-      id: recovered.operation.id,
-      expected: recovered.operation.graphRevision,
+      id: replay.operation.id,
+      expected: replay.operation.graphRevision,
     });
     assert.deepEqual(await db.call("graphIntegrity", null), []);
   } finally {
@@ -339,6 +345,18 @@ test("conservative entity identity, edge cycle/causality/symmetry, bounded pages
         .get()!.n,
       1,
     );
+    graph.write({ ...a, revision: 2, placement: "anchored", time: time(2000) });
+    assert.throws(
+      () =>
+        graph.write({
+          ...b,
+          revision: 2,
+          placement: "anchored",
+          time: time(1990),
+        }),
+      /INVALID_EDGE/,
+    );
+    assert.equal(graph.node(b.id)!.revision, 1);
     assert.deepEqual(graph.integrity(), []);
     raw.close();
   } finally {

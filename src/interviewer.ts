@@ -4,7 +4,12 @@ import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-agent";
 import { readFile } from "node:fs/promises";
 /** Agent-scoped production preset; only the five packaged references are readable. */
-export const inject = ["systemPrompt", "tools", "laorenyunMemory"];
+export const inject = [
+  "systemPrompt",
+  "tools",
+  "laorenyunMemory",
+  "compaction",
+];
 export async function apply(ctx: Context): Promise<void> {
   const root = new URL("../skills/oral-history-interviewer/", import.meta.url);
   const skill = (await readFile(new URL("SKILL.md", root), "utf8")).replace(

@@ -135,6 +135,10 @@ export class GraphStorage {
         .digest("hex");
       if (hash !== op.inputHash)
         throw new DomainError("INPUT_CHANGED", "immutable transcript hash");
+      // A durable proposal retains the exact graph version and whitelist used
+      // by its model call. Recovery must not silently rebase an old result.
+      if (op.result)
+        return { operation: op, transcript: t, candidates: [], conflicts: [] };
       this.db
         .prepare(
           "UPDATE memory_extraction_operations SET state=?,attempts=attempts+1,graph_revision=? WHERE id=?",
@@ -284,6 +288,20 @@ export class GraphStorage {
     return id;
   }
   write(n: GraphNode): void {
+    const impossible = this.db
+      .prepare(
+        `SELECT 1 FROM memory_edges e
+      JOIN memory_revisions r JOIN memory_current c ON c.id=r.id AND c.revision=r.revision
+      WHERE e.kind='PRECEDES' AND
+      ((e.from_id=? AND r.id=e.to_id AND ? > json_extract(r.json,'$.time.end')) OR
+       (e.to_id=? AND r.id=e.from_id AND json_extract(r.json,'$.time.start') > ?)) LIMIT 1`,
+      )
+      .get(n.id, n.time.start, n.id, n.time.end);
+    if (impossible)
+      throw new DomainError(
+        "INVALID_EDGE",
+        "revision contradicts existing temporal order",
+      );
     this.db
       .prepare("INSERT INTO memory_revisions VALUES(?,?,?,?)")
       .run(n.id, n.revision, n.transcriptId, JSON.stringify(n));

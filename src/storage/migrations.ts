@@ -51,12 +51,12 @@ export function migrate(db: DatabaseSync): void {
       CREATE TABLE assistant_replies(session_id TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE receipts(transcript_id TEXT PRIMARY KEY REFERENCES transcripts(id), state TEXT NOT NULL);
       PRAGMA user_version=3; COMMIT`);
-      migrate(db);
-      return;
     } catch (error) {
       db.exec("ROLLBACK");
       throw error;
     }
+    migrate(db);
+    return;
   }
   if (version === 1) {
     db.exec("BEGIN IMMEDIATE");

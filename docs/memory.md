@@ -1,58 +1,45 @@
-> Phase 3 当前实现以 [phase-3](phase-3.md)、[提案类型](../src/memory/types.ts)、[校验](../src/memory/validate.ts)、[worker协议](../src/storage/protocol.ts) 为准；下方未匹配源码的完整产品草图仍是未来契约。
+# SQLite 记忆存储
 
-> Phase 2 当前实现边界见 [phase-2](phase-2.md)；下方完整产品草图仍含后续阶段，源码类型为实际字段权威。
+Owner：插件存储实现和恢复协议。产品语义见[应用04](https://github.com/Develata/laorenyun/blob/main/docs/04-memory-graph.md)，来源原则见[应用07](https://github.com/Develata/laorenyun/blob/main/docs/07-provenance-and-integrity.md)。实现证据见 [Phase 3](phase-3.md)。
 
-# SQLite与文件权威
+## 当前 schema 4
 
-> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+一个 `node:sqlite` worker 拥有 `/app/data/laorenyun.db`。媒体文件不进SQLite，DSH日志独立保留；不访问DSH私有SQL表。`migrations.ts`逐版本事务迁移，拒绝未来版本，不重置已有数据。WAL、外键和FULL同步；仅支持本地普通文件系统。
 
-Owner：本文件拥有存储映射和恢复协议。领域词汇见[应用04](https://github.com/Develata/laorenyun/blob/main/docs/04-memory-graph.md)，来源语义见[07](https://github.com/Develata/laorenyun/blob/main/docs/07-provenance-and-integrity.md)。
+| 关系 | 当前责任 |
+|---|---|
+| media / sources / speech_attempts | 原件、衍生件、ASR尝试及草稿身份 |
+| transcripts / receipts / session_speakers | 一次接纳一个不可变transcript ID，显式speaker，DSH回执核对 |
+| memory_revisions / memory_current | 不可变修订及当前指针；复用Phase1表 |
+| people / places / node_people / node_places | 保守实体及修订关联；同名不自动合并 |
+| source_refs | 修订→transcript ID→逐字quote、field；真实外键 |
+| memory_edges | 四种边；RELATES_TO规范方向、PRECEDES无环且时间可行 |
+| conflicts | 双方确切revision、open/resolved/dismissed类型、澄清来源 |
+| memory_extraction_operations | 唯一transcript任务、输入hash、图版本、输出、状态、模型计量 |
+| graph_metadata | 单调graphRevision；语音缓存不使其增长 |
+| branches / branch_answers / branch_memos | 同意、原生child身份、真人去重计数、真实/partial memo |
+| scheduler_decisions / interview_deferrals | 可重现评分和种子、暂缓窗口 |
 
-## SQLite选择
+字段和worker请求的唯一实现权威为 [types](../src/memory/types.ts)、[protocol](../src/storage/protocol.ts)、[DDL](../src/storage/migrations.ts)。未实现人物画像/自传/导出表，不为空概念提前建表。dismissed目前是领域状态预留，没有自动驳回冲突入口。
 
-Node24 `node:sqlite`，不用ORM或DSH内部SQL表。DSH公开KV不能替代跨表事务、区间查询及版本引用；在独立 `/app/data/laorenyun.db` 保存领域关系。DatabaseSync运行在**一个专用worker线程**，避免busy等待/大查询冻结Host；这是隔离同步DB的运行细节，不是微服务。
+## 抽取与修订
 
-worker队列最多64项，预定义查询+参数，不接受任意SQL；查询deadline 2秒，忙锁等待最多100ms，写事务deadline5秒（网络等待不进事务）。超时拒绝新任务、请求停止worker，最多2秒等退出；只有确认旧worker退出才能重建连接。未退出则DB facade保持degraded并要求受控Host重启，不能并行再开writer。未回执写在恢复后按operation查询再重试。终止线程不能证明未提交；SQLite事务/operation表负责辨别。列值/列表/输出按contracts限制，媒体不经过worker消息复制。导出分批读，禁止一次loadAll人生档案。
+`acceptHuman`事务内插入 `extract:<transcriptId>`；单消费者领取输入，释放事务后调用DSH模型。严格JSON最多一次格式修复。输出先持久化，再短事务验证候选白名单、逐字证据、时间、实体、边、graphRevision，提交修订。模型没有SQL或图写工具。
 
-## 最小关系映射（列草图，不是DDL实现）
+自动confirmed要求完整原句（保留否定和限定词）、字段证据、字面时间、无身份歧义和冲突；含义是“在提交证言中”，不是独立核实。推断保持candidate。新的时间锚点产生同ID新revision；实质冲突保留两份节点。澄清使选中端追加有效修订、另一端追加superseded修订，不删除旧记录。
 
-| 表/族 | 主键与关键字段 | 责任 |
-|---|---|---|
-| media | id、kind、relative_path、sha256、bytes、mime、duration、capture_status | 音频/照片统一元数据，文件在磁盘 |
-| speakers | id/revision、role/name/relation | 显式来源快照 |
-| sources | id、kind、media_id、session/message、speaker_revision、status | 证言与采集单元 |
-| asr_attempts | id、media_id、engine/config_hash、raw_artifact_path、job_state | 不可变ASR响应及识别任务状态 |
-| transcript_revisions | segment_id/revision、source_id、text/kind、audio_range/alignment、confirmed_at | 用户文字与原ASR分离 |
-| people / places | id、display_name、aliases | 只对明确实体建记录；同名不自动合并 |
-| memory_nodes / node_revisions | id/current_revision；id/revision、六要素、time范围、status | 不可变历史与当前指针 |
-| node_people / node_places | node_id/revision/entity_id | 参与关系，不再存INVOLVES边 |
-| memory_edges | id、from/to、kind、basis/status、revision | 最小cross-link词汇 |
-| source_refs | owner_kind/id/revision/field、source/segment/revision/range | provenance连接；受控owner enum，事务查有效引用 |
-| conflicts | id/revision、left/right node revisions、status/resolution_refs | 不再同步CONTRADICTS边 |
-| interviews / branches | id、session IDs、status、answer_count、return operation | 单主线/活动支线关系 |
-| branch_memos | branch_id/revision、结构化memo、input_revision | partial也可保存，无独立文档数据库 |
-| operations | id、input_hash、kind、state、receipt、attempt、deadline | 去重/恢复任务与跨DSH桥接 |
-| derived_generations | id、kind persona/biography/export、manifest、status、paths | 三种派生产物共用生命周期，避免三套任务系统 |
-| metadata | schema_version、graph_revision、active pointers | 单调版本与短事务CAS |
+已持久提案在冷恢复时保留原图版本与输入白名单，禁止静默换成当前版本；CAS变化最多一次重新抽取。running重启回pending；最多3次领取，失败显式留存，`memoryRetry`是受控worker操作，尚无老人重试面板。applied重放无副作用。遗留transcript每批最多50条补任务，不一次载入人生档案。
 
-数组/六要素文本可JSON存储，查询常用字段time/status/ID正常列；不用可随意键值EAV图。外键、CHECK、UNIQUE在实际DDL中实现；source_refs多态owner无法仅靠单SQL FK保证时，在单application事务验证并做integrity检查，不宣称已有强外键。
+## 查询与资源边界
 
-关键索引：nodes(status,placement,time_start,time_end,id)、edges(from,kind,to)/(to,kind,from)、source_refs(owner_kind,id,revision)、transcript(source_id,segment_id,revision)、operations unique ID/input hash、branches唯一active interview。PRECEDES周期检测只遍历该关系，不限制RELATES_TO/ELABORATES为树；最坏O(V+E)，有节点/访问上限并拒绝超预算确认。
+worker最多64待处理请求，调用有deadline。查询只允许预定义操作，参数化SQL；没有任意SQL/path接口。列表最多50，紧凑索引12，出处深读10段/8000字，邻居一跳；cursor绑定图版本。模型每轮最多6次timeline调用、累计12000字符。
 
-## 原件提交与崩溃
+节点修订证据最多100条，超过显式失败；不是静默裁剪出处。PRECEDES遍历最多10000节点，超预算拒绝。完整图integrity用于测试/检查，不每轮扫描。来源缺失、时间范围、当前指针、外键、边词汇/环均有检查。
 
-单uploadId由Host分配受控目录；逐chunk创建、hash检查、fsync后ack。finalize先确认连续序号/总大小/hash，再生成不可变最终文件，fsync文件、同文件系统rename、fsync目录，最后SQLite事务登记Media和operation receipt。Hash只做完整性，不作内容安全/身份证明。
+## 故障原则
 
-- 文件写失败：DB不能标complete，浏览器保留未ack字节。
-- 文件rename成功、DB失败：保留文件和upload journal，启动按ID/hash补登记，不当作垃圾删除。
-- DB成功、response丢失：同operation查回执返回原Media。
-- 未完成录音：保留已ack片段并标partial，可能不是有效独立音频；可以导出原字节，但不能假称ASR一定可用。
-- 文件缺失/被外部修改：读取前核验hash，返回CORRUPT_SOURCE，标不可用并提示从备份恢复，不篡改DB hash适应坏文件。
-
-WAL、foreign_keys=ON、synchronous=FULL；只在本地普通文件系统，拒绝宣称NFS/云盘同步安全。文件hash可流式算，Flash请求流式发送无base64整段副本。
-
-## 修订事务
-
-MemoryRepository.apply在一个事务校验graphRevision、所有node/source refs、状态迁移、time和边约束；写不可变revision、更新current pointers、同步entities/edges/conflicts和graphRevision。AI proposal不能直接绕过确认策略。修改会使派生产物stale，但不删除旧版本。
-
-schema变更使用编号SQL迁移、事务、版本拒写；跨文件格式迁移先生成新文件后CAS切引用，旧文件保留。迁移/备份/容量政策归[应用部署](https://github.com/Develata/laorenyun/blob/main/docs/10-deployment.md)。故障测试必须包括ack丢失后检查operation，不能把worker异常等同rollback。
+- 模型失败：transcript/source有效，抽取failed，采访继续。
+- DB回执丢失：根据operation ID查询，不假定worker异常等于回滚。
+- 图版本改变：旧提案不直接覆盖当前图。
+- 澄清校验失败：事务整体回滚，旧冲突仍open。
+- 备份必须覆盖DB、WAL一致性与媒体；发行流程归[部署文档](https://github.com/Develata/laorenyun/blob/main/docs/10-deployment.md)。
