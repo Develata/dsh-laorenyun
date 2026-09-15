@@ -300,6 +300,7 @@ export async function apply(ctx: Context): Promise<void> {
             speaker: { role: SpeakerRole };
             draft: Source | null;
             branch: Branch | null;
+            activeBranch: Branch | null;
             interview: InterviewState | null;
             reply: AssistantReply | null;
             processing: boolean;
@@ -310,6 +311,26 @@ export async function apply(ctx: Context): Promise<void> {
           setSource(v.draft);
           setRole(v.speaker.role);
           setBranch(v.branch);
+          if (
+            v.activeBranch?.topic &&
+            v.activeBranch.state === "active" &&
+            !v.processing
+          ) {
+            await ctx.sessions.refreshSubagents(sessionId);
+            if (mounted.current) {
+              ctx.sessions.openSubagent({
+                parentSessionId: sessionId,
+                childSessionId: v.activeBranch.sessionId as SessionId,
+                mode: "continuable",
+              });
+            }
+          } else if (
+            v.branch?.topic &&
+            v.branch.state === "closed" &&
+            v.branch.returned
+          ) {
+            ctx.sessions.open(v.branch.parentSessionId as SessionId);
+          }
           setInitialized(!!v.interview || !!v.reply);
           setReply(v.reply);
           setProcessing(v.processing);
@@ -370,7 +391,7 @@ export async function apply(ctx: Context): Promise<void> {
     }, [sessionId]);
     useEffect(() => {
       const block =
-        branch?.state === "closed"
+        branch?.state === "closed" || branch?.state === "closing"
           ? "这段支线已保存五次回答，请回到主线。"
           : stage !== "ready" || processing || playing
             ? "请等这一轮完成；您可以暂停采访。"

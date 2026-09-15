@@ -1,3 +1,7 @@
+import { randomInt } from "node:crypto";
+import { schedule, type Region } from "../memory/scheduler.ts";
+import { parseMemo, partialMemo } from "../memory/branch.ts";
+import { GraphStorage } from "../memory/storage.ts";
 import type {
   SpeechAttempt,
   InterviewState,
@@ -36,6 +40,7 @@ try {
   port.close();
   throw error;
 }
+const graph = new GraphStorage(db);
 function read<T>(sql: string, ...params: string[]): T | null {
   const row = db.prepare(sql).get(...params);
   return row ? (JSON.parse(String(row.json)) as T) : null;
@@ -80,6 +85,248 @@ function handle(r: WorkerRequest): unknown {
   if (Date.now() >= r.deadline)
     throw new DomainError("TIMEOUT", "queued database request expired");
   switch (r.method) {
+    case "branchProposal":
+      return transaction(() => {
+        const i = r.input,
+          t = graph.transcript(i.transcriptId);
+        if (
+          t.sessionId !== i.parentSessionId ||
+          branch(i.parentSessionId) ||
+          !i.topic.trim() ||
+          i.topic.length > 120 ||
+          i.returnAnchor.length > 500
+        )
+          throw new DomainError("INVALID_BRANCH", "bounded Main proposal");
+        const existing = read<Branch>(
+          "SELECT json FROM branches WHERE parent_session_id=? AND state IN ('proposed','provisioning','active','closing')",
+          i.parentSessionId,
+        );
+        if (existing) return existing;
+        const b: Branch = {
+          id: randomUUID() as Branch["id"],
+          parentSessionId: i.parentSessionId,
+          sessionId: randomUUID(),
+          state: "proposed",
+          answerCount: 0,
+          memo: null,
+          topic: i.topic,
+          returnAnchor: i.returnAnchor,
+          proposalTranscriptId: i.transcriptId,
+        };
+        db.prepare("INSERT INTO branches VALUES(?,?,?,?,?,?)").run(
+          b.id,
+          b.parentSessionId,
+          b.sessionId,
+          b.state,
+          0,
+          JSON.stringify(b),
+        );
+        return b;
+      });
+    case "branchConsent":
+      return transaction(() => {
+        const b = read<Branch>(
+          "SELECT json FROM branches WHERE parent_session_id=? AND state IN ('proposed','provisioning','active')",
+          r.input.parentSessionId,
+        );
+        if (!b) throw new DomainError("NOT_FOUND", "proposal");
+        if (b.state !== "proposed") return b;
+        const t = graph.transcript(r.input.transcriptId),
+          latest = read<TranscriptSegment>(
+            "SELECT json FROM transcripts WHERE session_id=? ORDER BY rowid DESC LIMIT 1",
+            b.parentSessionId,
+          );
+        if (
+          t.sessionId !== b.parentSessionId ||
+          latest?.id !== t.id ||
+          t.id === b.proposalTranscriptId
+        )
+          throw new DomainError("CONSENT_REQUIRED", "new human answer");
+        if (/不想|不愿|先不|以后|跳过|不要/.test(t.text))
+          return saveBranch({ ...b, state: "cancelled" });
+        if (
+          !/^(好[的啊呀]?|可以|愿意|行|讲讲|说说|那就|嗯|没问题)/.test(
+            t.text.trim(),
+          )
+        )
+          throw new DomainError("CONSENT_REQUIRED", "explicit willingness");
+        return saveBranch({
+          ...b,
+          state: "provisioning",
+          consentTranscriptId: t.id,
+        });
+      });
+    case "branchClosing": {
+      const b = branch(r.input);
+      if (!b) throw new DomainError("NOT_FOUND", "branch");
+      return b.state === "active" ? saveBranch({ ...b, state: "closing" }) : b;
+    }
+    case "branchMemo":
+      return transaction(() => {
+        const b = branch(r.input.sessionId);
+        if (!b) throw new DomainError("NOT_FOUND", "branch");
+        if (b.state === "closed") return b;
+        if (b.state !== "closing")
+          throw new DomainError("BRANCH_STATE", "memo only while closing");
+        const sourceTurns = db
+          .prepare(
+            "SELECT transcript_id FROM branch_answers WHERE branch_id=? ORDER BY rowid",
+          )
+          .all(b.id)
+          .map((v) => String(v.transcript_id));
+        const input = {
+          topic: b.topic ?? "支线",
+          sourceTurns,
+          relatedNodes: [] as string[],
+          inputRevision: b.answerCount,
+        };
+        const memo =
+          r.input.memo.status === "partial"
+            ? partialMemo(input)
+            : parseMemo(JSON.stringify(r.input.memo), input);
+        db.prepare("INSERT INTO branch_memos VALUES(?,?)").run(
+          b.id,
+          JSON.stringify(memo),
+        );
+        return saveBranch({ ...b, memo, state: "closed" });
+      });
+    case "branchPending":
+      return db
+        .prepare(
+          "SELECT json FROM branches WHERE json_extract(json,'$.topic') IS NOT NULL AND (state IN ('provisioning','closing') OR (state='closed' AND coalesce(json_extract(json,'$.returned'),0)=0)) LIMIT 10",
+        )
+        .all()
+        .map((v) => JSON.parse(String(v.json)));
+    case "branchReturned": {
+      const b = branch(r.input);
+      if (b) saveBranch({ ...b, returned: true });
+      return null;
+    }
+    case "schedule":
+      return transaction(() => {
+        const i = r.input,
+          t = graph.transcript(i.transcriptId);
+        if (t.sessionId !== i.sessionId)
+          throw new DomainError("INVALID_SOURCE", "scheduler testimony");
+        const id = "schedule:" + i.transcriptId,
+          prior = read<ReturnType<typeof schedule>>(
+            "SELECT json FROM scheduler_decisions WHERE id=?",
+            id,
+          );
+        if (prior) return prior;
+        if (
+          i.currentMonth !== null &&
+          (!Number.isInteger(i.currentMonth) || i.currentMonth < 0)
+        )
+          throw new DomainError("INVALID_TIME", "current region");
+        const now = new Date(),
+          end = now.getUTCFullYear() * 12 + now.getUTCMonth();
+        const bounds = db
+          .prepare(
+            "SELECT min(json_extract(r.json,'$.time.start')) lo FROM memory_revisions r JOIN memory_current c USING(id,revision) WHERE json_extract(r.json,'$.status')='confirmed'",
+          )
+          .get();
+        const lo = bounds?.lo == null ? null : Number(bounds.lo);
+        const regions: Region[] = [];
+        const turn = Number(
+          db
+            .prepare("SELECT count(*) n FROM transcripts WHERE session_id=?")
+            .get(i.sessionId)!.n,
+        );
+        if (
+          i.currentMonth !== null &&
+          /不想谈|以后再说|先跳过|不想说/.test(t.text)
+        )
+          db.prepare(
+            "INSERT INTO interview_deferrals VALUES(?,?,?,?) ON CONFLICT(session_id,region) DO UPDATE SET until_turn=excluded.until_turn,transcript_id=excluded.transcript_id",
+          ).run(
+            i.sessionId,
+            String(Math.floor(i.currentMonth / 120) * 120),
+            turn + 8,
+            t.id,
+          );
+        if (lo !== null) {
+          const start = Math.floor(lo / 120) * 120;
+          const width = Math.max(
+            120,
+            Math.ceil((end - start + 1) / 12 / 120) * 120,
+          );
+          for (let m = start; m <= end && regions.length < 12; m += width) {
+            const hi = Math.min(end, m + width - 1),
+              mid = Math.floor((m + hi) / 2);
+            const row = db
+              .prepare(
+                `SELECT count(*) n,min(max(0,json_extract(r.json,'$.time.start')-?,?-json_extract(r.json,'$.time.end'))) gap FROM memory_revisions r JOIN memory_current c USING(id,revision) WHERE json_extract(r.json,'$.status')='confirmed' AND json_extract(r.json,'$.time.start') IS NOT NULL`,
+              )
+              .get(mid, mid)!;
+            const n = Number(
+              db
+                .prepare(
+                  "SELECT count(*) n FROM memory_revisions r JOIN memory_current c USING(id,revision) WHERE json_extract(r.json,'$.status')='confirmed' AND json_extract(r.json,'$.time.start')<=? AND json_extract(r.json,'$.time.end')>=?",
+                )
+                .get(hi, m)!.n,
+            );
+            const unresolved = Number(
+              db
+                .prepare(
+                  "SELECT count(*) n FROM conflicts f JOIN memory_revisions r ON r.id=f.left_id AND r.revision=f.left_revision WHERE f.status='open' AND json_extract(r.json,'$.time.start')<=? AND json_extract(r.json,'$.time.end')>=?",
+                )
+                .get(hi, m)!.n,
+            );
+            regions.push({
+              id: String(m),
+              start: m,
+              end: hi,
+              n,
+              gap: Number(row.gap ?? 120),
+              unresolved,
+            });
+          }
+        }
+        const deferred = db
+          .prepare(
+            "SELECT region FROM interview_deferrals WHERE session_id=? AND until_turn>?",
+          )
+          .all(i.sessionId, turn)
+          .map((v) => String(v.region));
+        const result = schedule({
+          graphRevision: graph.revision(),
+          regions,
+          currentMonth: i.currentMonth,
+          deferred,
+          seed: randomInt(1, 2147483647),
+          boundary: i.boundary,
+          userChoseTopic: i.userChoseTopic,
+        });
+        db.prepare("INSERT INTO scheduler_decisions VALUES(?,?,?)").run(
+          id,
+          i.sessionId,
+          JSON.stringify(result),
+        );
+        return result;
+      });
+    case "memoryRecover":
+      graph.recover();
+      return null;
+    case "memoryClaim":
+      return graph.claim();
+    case "memoryProposal":
+      graph.saveProposal(r.input.id, r.input.result, r.input.evidence);
+      return null;
+    case "memoryApply":
+      return graph.apply(r.input.id, r.input.expected);
+    case "memoryRetry":
+      graph.retry(r.input);
+      return null;
+    case "memoryFail":
+      graph.fail(r.input.id, r.input.code);
+      return null;
+    case "memoryOperation":
+      return graph.operation(r.input);
+    case "timeline":
+      return graph.query(r.input);
+    case "graphIntegrity":
+      return graph.integrity();
     case "attachRecording": {
       const v = source(r.input.sourceId);
       if (v.status !== "draft" || (v.mediaId && v.mediaId !== r.input.mediaId))
@@ -324,7 +571,7 @@ function handle(r: WorkerRequest): unknown {
             transcript: old,
             branch: b,
             duplicate: true,
-            blocked: b?.state === "closed",
+            blocked: b?.state === "closed" || b?.state === "closing",
           };
         }
         if (b && b.state !== "active")
@@ -402,6 +649,8 @@ function handle(r: WorkerRequest): unknown {
           JSON.stringify(t),
         );
         saveSource({ ...s, status: "submitted", draft: ref.text });
+        graph.enqueue(t);
+        graph.defer(t);
         if (b) {
           db.prepare("INSERT INTO branch_answers VALUES(?,?,?,?)").run(
             b.id,
@@ -410,7 +659,9 @@ function handle(r: WorkerRequest): unknown {
             t.id,
           );
           b.answerCount++;
-          if (b.answerCount === 5) {
+          if (b.answerCount === 5 && b.topic) {
+            b.state = "closing";
+          } else if (b.answerCount === 5) {
             b.state = "closed";
             b.memo = {
               title: "支线验证",
@@ -437,7 +688,7 @@ function handle(r: WorkerRequest): unknown {
           transcript: t,
           branch: b,
           duplicate: false,
-          blocked: b?.state === "closed",
+          blocked: b?.state === "closed" || b?.state === "closing",
         };
       });
     case "putMemory":
@@ -484,6 +735,7 @@ function handle(r: WorkerRequest): unknown {
         db.prepare(
           "INSERT INTO memory_current VALUES(?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision",
         ).run(n.id, n.revision);
+        graph.bump();
         return n;
       });
     case "getMemory":
@@ -522,7 +774,7 @@ function handle(r: WorkerRequest): unknown {
     }
     case "getParentBranch":
       return read<Branch>(
-        "SELECT json FROM branches WHERE parent_session_id=? AND state IN ('active','provisioning')",
+        "SELECT json FROM branches WHERE parent_session_id=? AND state IN ('proposed','active','provisioning','closing')",
         r.input,
       );
     case "getBranch":

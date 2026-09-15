@@ -68,6 +68,8 @@ export interface MemoryNode {
   basis: "stated" | "inferred";
 }
 export interface BranchMemo {
+  status?: "complete" | "partial";
+  input_revision?: number;
   title: string;
   key_sentence: string;
   summary: string;
@@ -84,7 +86,18 @@ export interface Branch {
   id: BranchId;
   parentSessionId: string;
   sessionId: string;
-  state: "provisioning" | "active" | "closed";
+  state:
+    | "proposed"
+    | "cancelled"
+    | "provisioning"
+    | "active"
+    | "closing"
+    | "closed";
+  topic?: string;
+  returnAnchor?: string;
+  proposalTranscriptId?: string;
+  consentTranscriptId?: string;
+  returned?: boolean;
   answerCount: number;
   memo: BranchMemo | null;
 }

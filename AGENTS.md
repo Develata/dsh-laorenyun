@@ -1,6 +1,6 @@
 # dsh-laorenyun — 业务插件
 
-始终中文交流。当前处于 Phase 2 语音与采访实现；Phase 0 文档中的后续接口不能当作已实现功能。先读 docs/phase-2.md 获取当前证据，Phase 1 门禁仍须回归。
+始终中文交流。当前处于 Phase 3 记忆与主支线实现；Phase 0 文档中的后续接口不能当作已实现功能。先读 docs/phase-3.md 与 docs/phase-2.md 获取当前证据，Phase 1 门禁仍须回归。
 
 先读 [README路由](README.md)、[architecture](docs/architecture.md)、[应用不变量](https://github.com/Develata/laorenyun/blob/main/docs/02-architecture.md)，然后当前模块 contract/testing。跨库本地路径 `../laorenyun/`。
 

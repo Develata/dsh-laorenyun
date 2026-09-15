@@ -1,3 +1,5 @@
+> Phase 3 当前实现以 [phase-3](phase-3.md)、[提案类型](../src/memory/types.ts)、[校验](../src/memory/validate.ts)、[worker协议](../src/storage/protocol.ts) 为准；下方未匹配源码的完整产品草图仍是未来契约。
+
 > Phase 2 当前实现边界见 [phase-2](phase-2.md)；下方完整产品草图仍含后续阶段，源码类型为实际字段权威。
 
 # 插件模块与 DSH 适配

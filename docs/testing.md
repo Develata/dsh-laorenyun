@@ -16,3 +16,7 @@ Owner：模块检查与测试入口。产品验收见[应用11](https://github.c
 可选真实云测试：显式配置私密环境后 `node scripts/cloud-smoke.mjs --cloud /path/to/untracked-audio`；参数可省略音频只测TTS。普通CI不执行；不提交私密音频、文字或凭据。实测输出只保留长度/时延/引擎等非敏感证据。
 
 精确已执行结果及未覆盖项见[phase-2](phase-2.md)。未来memory extraction/graph查询/river/export测试属于对应阶段，不能把设计清单写成通过记录。
+
+## Phase 3
+
+`pnpm check` + `pnpm format:check` + `git diff --check`。`tests/memory.test.ts`使用合成中文、schema-only Phase2 fixture、真实worker/SQLite验证证据、修订、冲突、冷恢复、候选CAS、图完整性、边约束、支线closing和调度种子。真实模型/容器结果只在[应用报告](https://github.com/Develata/laorenyun/blob/main/docs/phase-3.md)声明。普通CI不自动调用付费服务。

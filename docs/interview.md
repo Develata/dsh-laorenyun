@@ -6,7 +6,7 @@ Owner：插件DSH边界与恢复。行为规范见[应用03](https://github.com/
 
 `dsh-laorenyun/interviewer` 在采访preset内注册一个完整system section，预载打包 [SKILL.md](../skills/oral-history-interviewer/SKILL.md)。详细提问、年代、敏感经历、澄清、支线规则通过只读 `interview_reference` 白名单工具按需读。目录由发行profile提供给原生skill-filesystem发现，不开放任意fs/shell/network/Git工具。
 
-当前上下文是原生DSH历史、紧凑技能和初始化状态。没有抽取、调度器或虚构timeline工具；Main不限采访轮数，用户可以停/休息。模型协议/路由由发行层与DSH provider拥有。
+Phase 3 上下文增加持久的紧凑图索引及真实只读timeline工具，抽取由应用队列拥有；Main不限采访轮数，用户可以停/休息。模型协议/路由由发行层与DSH provider拥有。
 
 ## 持久初始化
 
@@ -24,4 +24,10 @@ Client只在活动会话新增真人event时准备朗读；历史replace/prepend
 
 ## Branch
 
-保留[Phase1已验证生命周期](phase-1.md)：独立可续接子会话、明确human RPC归属、SQLite答案ID去重、冷恢复、第五个真人答案确定性关闭和BranchMemo。Phase2不新增自动支线判断或智能memo；Phase3按[应用03](https://github.com/Develata/laorenyun/blob/main/docs/03-interview-agent.md)接入真实智能，不能重新把工具/assistant消息计为用户回答。
+保留[Phase1已验证生命周期](phase-1.md)：独立可续接子会话、明确human RPC归属、SQLite答案ID去重、冷恢复、第五个真人答案确定性关闭和BranchMemo。Phase3增加意愿提议、隔离子会话、内部结构memo和回流，按[应用03](https://github.com/Develata/laorenyun/blob/main/docs/03-interview-agent.md)接入真实智能，不能重新把工具/assistant消息计为用户回答。
+
+## Phase 3 执行面
+
+参见[实现边界](phase-3.md)。`system-prompt/assemble`贡献可追溯context snapshot，不修改底层llm/stream历史。`interview_propose_branch`只登记主题；`interview_accept_branch`必须引用最新且晚于提议的真人回答，经Host明确意愿规则才spawn。第五答使用公开session.append/flush写入原生历史后pre-step reject，阻止普通Branch模型再发问。关闭任务复用DSH llm.stream，tools为空；JSON失败保存partial并回流。Main回流消息source.kind=plugin，不计真人答案。
+
+老人界面通过既有session导航进入支线，关闭后回到Main；不增加第二套聊天编辑器。一个活跃支线，旧Phase1探针仍只在显式dev/probes下可用。

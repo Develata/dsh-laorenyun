@@ -1,3 +1,4 @@
+import { installIntelligence } from "./memory/host.ts";
 import { fixtureAsr, fixtureTts } from "./probes/speech.ts";
 import { createUserMessage, MessageId } from "@deepseek-ai/dsh-llm";
 import { SpeechService } from "./speech/service.ts";
@@ -75,10 +76,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           }),
   );
   await speech.initialize();
-  ctx.effect(() => async () => {
-    await speech.close();
-    await app.close();
-  });
+
   const resolve = async (id: string) => {
     if (!id || id.length > 128)
       throw new DomainError("INVALID_SESSION", "session identity");
@@ -87,6 +85,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       throw new DomainError("SESSION_ERROR", "interview is unavailable");
     return result.agent;
   };
+  const closeIntelligence = await installIntelligence(ctx, app.db, resolve);
+  ctx.effect(() => async () => {
+    await closeIntelligence();
+    await speech.close();
+    await app.close();
+  });
   const reconcile = async (id: string) => {
     const agent = await resolve(id);
     const receipts = await app.db.call("getReceipts", id);
@@ -133,7 +137,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     ctx.effect(() =>
       ctx.llm.registerAdapter(["laorenyun-fixture"], new FixtureLlm()),
     );
-  ctx.on("agent/pre-step", async ({ agent, messages, signal }, next) => {
+  ctx.on("agent/pre-step", async ({ agent, messages, signal, step }, next) => {
+    if (step > 8) return { kind: "reject" };
     const rejected = new Set<string>();
     for (const message of messages) {
       if (message.role !== "user") continue;
@@ -143,6 +148,32 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         signal,
         deadline: Date.now() + 5000,
       });
+      ctx.laorenyunMemory.memory.wake();
+      if (receipt.branch?.state === "closing" && receipt.transcript) {
+        // Public durable log admission; block any model step after the fifth answer.
+        if (
+          !agent.session
+            .snapshotEvents()
+            .some((e) => e.type === "user/message" && e.data.id === message.id)
+        ) {
+          const ref = parseSourceReference(input.text);
+          agent.session.append(
+            "user/message",
+            {
+              ...message,
+              content: [{ type: "text", text: ref.text }],
+              source: {
+                ...message.source,
+                ...(ref.sourceId ? { laorenyunSourceId: ref.sourceId } : {}),
+              },
+            },
+            { surfaceOp: "append" },
+          );
+          await agent.ctx.parallel("session/flush", agent.session);
+        }
+        rejected.add(String(message.id));
+        await ctx.laorenyunMemory.finish(String(agent.id));
+      }
       if (receipt.blocked && !receipt.transcript)
         rejected.add(String(message.id));
     }
@@ -248,6 +279,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             text: r.transcript.text,
           }))
         : [],
+      activeBranch: sessionId
+        ? await app.db.call("getParentBranch", sessionId)
+        : null,
       probes: config.probes,
       developer: config.developer,
       speaker: await app.db.call("getSessionSpeaker", sessionId),
@@ -495,7 +529,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     });
   }
   ctx.logger.info(
-    "laorenyun: database ready; schema=3; probes=" + String(config.probes),
+    "laorenyun: database ready; schema=4; probes=" + String(config.probes),
   );
 }
 

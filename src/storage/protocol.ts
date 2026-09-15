@@ -1,4 +1,11 @@
 import type {
+  ExtractionInput,
+  ExtractionResult,
+  ExtractionOperation,
+  TimelineQuery,
+  Page,
+} from "../memory/types.ts";
+import type {
   SpeechAttempt,
   InterviewState,
   AssistantReply,
@@ -14,6 +21,56 @@ import type {
   TranscriptSegment,
 } from "../domain/types.ts";
 export interface Operations {
+  branchProposal: {
+    input: {
+      parentSessionId: string;
+      topic: string;
+      returnAnchor: string;
+      transcriptId: string;
+    };
+    output: Branch;
+  };
+  branchConsent: {
+    input: { parentSessionId: string; transcriptId: string };
+    output: Branch;
+  };
+  branchClosing: { input: string; output: Branch };
+  branchMemo: {
+    input: { sessionId: string; memo: import("../domain/types.ts").BranchMemo };
+    output: Branch;
+  };
+  branchPending: { input: null; output: Branch[] };
+  branchReturned: { input: string; output: null };
+  schedule: {
+    input: {
+      sessionId: string;
+      boundary: boolean;
+      userChoseTopic: boolean;
+      currentMonth: number | null;
+      transcriptId: string;
+    };
+    output: ReturnType<typeof import("../memory/scheduler.ts").schedule>;
+  };
+  memoryRecover: { input: null; output: null };
+  memoryClaim: { input: null; output: ExtractionInput | null };
+  memoryProposal: {
+    input: {
+      id: string;
+      result: ExtractionResult;
+      evidence?: { model: string; latencyMs: number; repairs: number };
+    };
+    output: null;
+  };
+  memoryApply: {
+    input: { id: string; expected: number };
+    output: { graphRevision: number; nodeIds: string[] };
+  };
+  memoryRetry: { input: string; output: null };
+  memoryFail: { input: { id: string; code: string }; output: null };
+  memoryOperation: { input: string; output: ExtractionOperation | null };
+  timeline: { input: TimelineQuery; output: Page };
+  graphIntegrity: { input: null; output: string[] };
+
   attachRecording: {
     input: { sourceId: SourceId; mediaId: string };
     output: Source;
