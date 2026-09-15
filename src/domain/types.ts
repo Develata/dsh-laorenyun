@@ -87,15 +87,7 @@ export interface Branch {
   answerCount: number;
   memo: BranchMemo | null;
 }
-export interface SpeechToTextProvider {
-  transcribe(
-    media: Media,
-    op: OperationContext,
-  ): Promise<{ text: string; provider: string }>;
-}
-export interface TextToSpeechProvider {
-  synthesize(text: string, op: OperationContext): Promise<Media>;
-}
+export type { SpeechToTextProvider, TextToSpeechProvider } from "./speech.ts";
 export interface RecordingStore {
   write(
     bytes: Uint8Array,

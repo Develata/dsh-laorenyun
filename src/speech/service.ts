@@ -111,20 +111,27 @@ export class SpeechService {
       };
       await this.app.db.call("putAttempt", attempt);
       try {
-        const original = await this.app.recordings.read(source.mediaId, op);
-        const wav = await normalizeAudio(original, this.root, op);
-        const format = inspectWav(wav);
-        const derivative = await this.app.recordings.write(
-          wav,
-          "audio/wav",
-          false,
-          op,
-          {
-            sourceId: id,
-            originalMediaId: source.mediaId,
-            durationMs: format.durationMs,
-          },
-        );
+        let derivative = previous?.derivative;
+        let wav: Uint8Array;
+        if (derivative && derivative.originalMediaId === source.mediaId) {
+          wav = await this.app.recordings.read(derivative.id, op);
+          inspectWav(wav);
+        } else {
+          const original = await this.app.recordings.read(source.mediaId, op);
+          wav = await normalizeAudio(original, this.root, op);
+          const format = inspectWav(wav);
+          derivative = await this.app.recordings.write(
+            wav,
+            "audio/wav",
+            false,
+            op,
+            {
+              sourceId: id,
+              originalMediaId: source.mediaId,
+              durationMs: format.durationMs,
+            },
+          );
+        }
         attempt = { ...attempt, state: "transcribing", derivative };
         await this.app.db.call("putAttempt", attempt);
         const result = await this.asr().transcribe(wav, op);

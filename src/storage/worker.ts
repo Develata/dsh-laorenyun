@@ -1,4 +1,8 @@
-import type { SpeechAttempt, InterviewState } from "../domain/speech.ts";
+import type {
+  SpeechAttempt,
+  InterviewState,
+  AssistantReply,
+} from "../domain/speech.ts";
 import { parentPort, workerData } from "node:worker_threads";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -161,11 +165,17 @@ function handle(r: WorkerRequest): unknown {
     }
     case "getInterview":
       return read("SELECT json FROM interviews WHERE session_id=?", r.input);
-    case "putReply":
+    case "putReply": {
+      const old = read<AssistantReply>(
+        "SELECT json FROM assistant_replies WHERE session_id=?",
+        r.input.sessionId,
+      );
+      if (old?.messageId === r.input.messageId) return old;
       db.prepare(
         "INSERT INTO assistant_replies VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET json=excluded.json",
       ).run(r.input.sessionId, JSON.stringify(r.input));
       return r.input;
+    }
     case "getReply":
       return read(
         "SELECT json FROM assistant_replies WHERE session_id=?",

@@ -286,3 +286,48 @@ test("TTS uses bounded chunks, SDK abort options, neutral bytes and one cached r
   assert.equal(audio.mime, "audio/mpeg");
   assert.throws(() => splitSpeech("x".repeat(1201)), /SIZE_LIMIT/);
 });
+
+test("TTS concurrent requests coalesce and cache latest stable message identity", async () => {
+  const root = await mkdtemp(join(tmpdir(), "laorenyun-tts-"));
+  const app = await Foundation.open(root);
+  let calls = 0;
+  const service = new SpeechService(
+    app,
+    root,
+    () => {
+      throw new Error("unused");
+    },
+    () => ({
+      async synthesize() {
+        calls++;
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        return {
+          bytes: new Uint8Array([1]),
+          mime: "audio/mpeg",
+          voice: "fixture",
+          requestIds: ["r"],
+        };
+      },
+    }),
+  );
+  try {
+    await app.db.call("putReply", {
+      sessionId: "s",
+      messageId: "m",
+      text: "一个问题",
+      createdAt: 1,
+    });
+    const [a, b] = await Promise.all([
+      service.synthesize("s", "m"),
+      service.synthesize("s", "m"),
+    ]);
+    assert.deepEqual(a, b);
+    await service.synthesize("s", "m");
+    assert.equal(calls, 1);
+    await assert.rejects(service.synthesize("other", "m"), /NOT_FOUND/);
+  } finally {
+    await service.close();
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

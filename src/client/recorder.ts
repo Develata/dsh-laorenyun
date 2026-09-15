@@ -82,8 +82,9 @@ export class Capture {
         }
       };
       this.recorder.onerror = () => {
-        this.failed?.(new Error("录音中断，请重试"));
-        this.dispose();
+        // MediaRecorder delivers final dataavailable/stop after an error.
+        // Enter the same preservation path instead of discarding collected evidence.
+        if (this.state === "recording") this.autoStop();
       };
       this.recorder.onstop = () => {
         const durationMs = Math.min(
@@ -130,7 +131,7 @@ export class Capture {
         clearTimeout(timer);
         reject(e);
       };
-      this.recorder!.stop();
+      if (this.recorder!.state !== "inactive") this.recorder!.stop();
     });
   }
   private release() {

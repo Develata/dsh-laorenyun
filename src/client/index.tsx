@@ -23,6 +23,7 @@ import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-session/client";
 import type { InputState } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { SessionId } from "@deepseek-ai/dsh-session/types";
+import type { SessionEventLikeEntry } from "@deepseek-ai/dsh-api-session-controller/client";
 import type { Source, SpeakerRole, Branch } from "../domain/types.ts";
 import { sourceMarker } from "../domain/source-reference.ts";
 import { api } from "./api.ts";
@@ -204,11 +205,21 @@ export async function apply(ctx: Context): Promise<void> {
       armed = useRef(awaitingFirstPlayback === sessionId),
       baseline = useRef<string | undefined>(undefined);
     const currentSource = useRef(source);
-    currentSource.current = source;
+    // Capture ownership is fixed at reserve; late polling cannot rebind an active recording.
     const capture = useRef<Capture | null>(null),
       playback = useRef<Playback | null>(null);
     const [loaded, setLoaded] = useState(false);
+    const [uncertain, setUncertain] = useState("");
     const controller = useRef(new AbortController());
+    useEffect(() => {
+      if (stage !== "recording" && !pending) return;
+      const warn = (event: BeforeUnloadEvent) => {
+        event.preventDefault();
+        event.returnValue = "";
+      };
+      window.addEventListener("beforeunload", warn);
+      return () => window.removeEventListener("beforeunload", warn);
+    }, [stage, !!pending]);
     const playing = playState !== "idle";
     const busy =
       stage !== "ready" || processing || playing || input.phase !== "plain";
@@ -286,6 +297,7 @@ export async function apply(ctx: Context): Promise<void> {
             interview: InterviewState | null;
             reply: AssistantReply | null;
             processing: boolean;
+            receipts: { state: string; text: string }[];
           }>("state", { sessionId }, controller.current.signal);
           if (!mounted.current) return;
           setReady(v.probes);
@@ -295,6 +307,12 @@ export async function apply(ctx: Context): Promise<void> {
           setInitialized(!!v.interview || !!v.reply);
           setReply(v.reply);
           setProcessing(v.processing);
+          setUncertain(
+            !v.processing
+              ? (v.receipts.find((r) => r.state === "domain-accepted")?.text ??
+                  "")
+              : "",
+          );
           setLoaded(true);
           if (baseline.current === undefined) {
             baseline.current = v.reply?.messageId ?? "";
@@ -326,12 +344,21 @@ export async function apply(ctx: Context): Promise<void> {
       };
     }, [sessionId]);
     useEffect(() => {
-      const actx = ctx.sessions.scope(sessionId);
-      if (!actx) return;
-      const store = ctx.conversation.input.for(actx).state;
-      return store.subscribe(() => {
-        const phase = store.getSnapshot().phase;
-        if (phase === "submitting" || phase === "adjudicating")
+      const feed = ctx.sessions.binding(sessionId)?.eventSource;
+      if (!feed) return;
+      // Live append only: baseline replacement and older-page prepend never arm speech.
+      return feed.subscribe(() => {
+        const change = feed.getSnapshot().change;
+        if (change.kind !== "append") return;
+        if (
+          change.entries.some(
+            (entry: SessionEventLikeEntry) =>
+              entry.type === "event" &&
+              entry.event.type === "user/message" &&
+              entry.event.data.source.kind === "user" &&
+              "rpcId" in entry.event.data.source,
+          )
+        )
           armed.current = true;
       });
     }, [sessionId]);
@@ -401,8 +428,12 @@ export async function apply(ctx: Context): Promise<void> {
           165000,
         );
         if (mounted.current) injectSource(result);
-      } catch {
-        report("录音已经保存，但文字识别失败。请点击重新识别。");
+      } catch (e) {
+        report(
+          String(e).includes("CONFIGURATION")
+            ? "录音已经保存，但语音服务配置尚不可用。请检查腾讯配置后重新识别。"
+            : "录音已经保存，但文字识别失败。请点击重新识别。",
+        );
       }
     };
     const upload = async (v: PendingRecording) => {
@@ -692,6 +723,11 @@ export async function apply(ctx: Context): Promise<void> {
         >
           录音保存在本机，腾讯云处理语音识别与朗读。整理出的文字可以修改，点击发送后才交给采访者。
         </small>
+        {uncertain && (
+          <p role="status">
+            这段文字已保存，但提交状态还需要核对，请勿重复发送：{uncertain}
+          </p>
+        )}
         {error && (
           <p role="alert" style={{ flexBasis: "100%" }}>
             {error}
