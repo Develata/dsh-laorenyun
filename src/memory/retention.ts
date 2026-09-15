@@ -42,7 +42,7 @@ export function installRetention(ctx: Context) {
     const first = agent.session.eventAt(surface[0]!);
     const start = first?.type === "system/message" ? 1 : 0;
     // Batch older turns: a one-turn summary can be larger than its source.
-    const keep = humans[4]!; // Keep five recent turns plus incoming input; never the full archive.
+    const keep = humans[7]!; // Keep two recent turns plus incoming input; graph tools retain deeper access.
     if (keep <= start) return next();
     const compaction = ctx.get("compaction") as NativeCompaction | undefined;
     if (!compaction)
