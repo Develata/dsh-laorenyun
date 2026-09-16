@@ -178,6 +178,38 @@ export class GraphStorage {
             places: n.places ?? [],
           };
         });
+      const correction = this.db
+        .prepare(
+          "SELECT node_id,revision FROM correction_intents WHERE source_id=?",
+        )
+        .get(t.sourceId);
+      const correctionTarget = correction
+        ? {
+            id: String(correction.node_id),
+            revision: Number(correction.revision),
+          }
+        : undefined;
+      if (correctionTarget) {
+        const n = this.node(correctionTarget.id);
+        if (!n || n.revision !== correctionTarget.revision)
+          throw new DomainError(
+            "REVISION_CONFLICT",
+            "selected correction changed",
+          );
+        if (!candidates.some((c) => c.id === n.id)) {
+          candidates.splice(11);
+          candidates.push({
+            id: n.id,
+            revision: n.revision,
+            keySentence: n.keySentence,
+            time: n.time,
+            placement: n.placement,
+            status: n.status,
+            people: n.people ?? [],
+            places: n.places ?? [],
+          });
+        }
+      }
       const conflicts = this.db
         .prepare(
           "SELECT json FROM conflicts WHERE status='open' ORDER BY rowid DESC LIMIT 5",
@@ -203,6 +235,7 @@ export class GraphStorage {
         transcript: t,
         candidates,
         conflicts,
+        correctionTarget,
       };
     });
   }
@@ -367,6 +400,21 @@ export class GraphStorage {
             "INVALID_RESOLUTION",
             "not in bounded input snapshot",
           );
+      const correction = this.db
+        .prepare(
+          "SELECT node_id,revision FROM correction_intents WHERE source_id=?",
+        )
+        .get(t.sourceId);
+      if (
+        correction &&
+        (result.proposals.length !== 1 ||
+          result.proposals[0]?.targetId !== correction.node_id ||
+          result.resolutions.length)
+      )
+        throw new DomainError(
+          "CORRECTION_SCOPE",
+          "one explicitly selected node",
+        );
       const transcripts = new Map([[t.id, t]]);
       const ids: string[] = [];
       for (const p of result.proposals) validateProposal(p, transcripts);
@@ -414,8 +462,15 @@ export class GraphStorage {
         let old = target ? this.node(target) : null;
         if (p.targetId && !old)
           throw new DomainError("NOT_FOUND", "target node");
+        const explicitCorrection = !!(
+          old &&
+          correction &&
+          old.id === correction.node_id &&
+          old.revision === Number(correction.revision)
+        );
         if (
           old &&
+          !explicitCorrection &&
           !(
             old.keySentence === p.keySentence ||
             (old.placement === "drifting" &&
@@ -431,6 +486,7 @@ export class GraphStorage {
           );
         if (
           old &&
+          !explicitCorrection &&
           comparisons.some(
             (c) =>
               c.verdict.includes("conflict") && c.verdict !== "not_conflict",
@@ -459,6 +515,12 @@ export class GraphStorage {
           n.people?.forEach((x) => allowedPeople.add(x));
           n.places?.forEach((x) => allowedPlaces.add(x));
         }
+        if (correction && !explicitCorrection)
+          throw new DomainError(
+            "REVISION_CONFLICT",
+            "correction current revision",
+          );
+        if (explicitCorrection) comparisons = [];
         const status = validateProposal(p, transcripts);
         const n: GraphNode = {
           id: (old?.id ?? randomUUID()) as GraphNode["id"],
@@ -483,6 +545,32 @@ export class GraphStorage {
         if (n.evidence.length > 100)
           throw new DomainError("EVIDENCE_LIMIT", "revision evidence cap");
         this.write(n);
+        if (explicitCorrection && old && old.keySentence !== n.keySentence) {
+          const conflict: Conflict = {
+            id: randomUUID(),
+            left: { id: old.id, revision: old.revision },
+            right: { id: n.id, revision: n.revision },
+            status: "resolved",
+            explanation: "使用者针对所选记忆提交明确更正；原证言保留。",
+            resolution: {
+              transcriptId: t.id,
+              text: t.text,
+              selectedNodeId: n.id,
+              at: Date.now(),
+            },
+          };
+          this.db
+            .prepare("INSERT INTO conflicts VALUES(?,?,?,?,?,?,?)")
+            .run(
+              conflict.id,
+              old.id,
+              old.revision,
+              n.id,
+              n.revision,
+              "resolved",
+              JSON.stringify(conflict),
+            );
+        }
         ids.push(n.id);
         for (const e of p.edges)
           this.edge(n.id, e.to, e.kind, e.evidence, transcripts);

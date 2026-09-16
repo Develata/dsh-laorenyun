@@ -1,7 +1,7 @@
 /** Only the worker imports SQLite; migrations are explicit and transactional. */
 import type { DatabaseSync } from "node:sqlite";
 import { DomainError } from "../domain/types.ts";
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export function migrate(db: DatabaseSync): void {
   const version = Number(db.prepare("PRAGMA user_version").get()?.user_version);
   if (version > SCHEMA_VERSION)
@@ -10,6 +10,22 @@ export function migrate(db: DatabaseSync): void {
       "database belongs to a newer application",
     );
   if (version === SCHEMA_VERSION) return;
+  if (version === 4) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.exec(`
+        CREATE TABLE correction_intents(source_id TEXT PRIMARY KEY REFERENCES sources(id), node_id TEXT NOT NULL, revision INTEGER NOT NULL, FOREIGN KEY(node_id,revision) REFERENCES memory_revisions(id,revision));
+        CREATE TABLE derived_generations(id TEXT PRIMARY KEY, kind TEXT NOT NULL, state TEXT NOT NULL, json TEXT NOT NULL);
+        CREATE UNIQUE INDEX one_derived_job ON derived_generations((1)) WHERE state IN ('pending','running');
+        CREATE TABLE derived_active(kind TEXT PRIMARY KEY, generation_id TEXT NOT NULL REFERENCES derived_generations(id));
+        PRAGMA user_version=5; COMMIT;
+      `);
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
+    return;
+  }
   if (version === 3) {
     db.exec("BEGIN IMMEDIATE");
     try {
@@ -41,6 +57,7 @@ export function migrate(db: DatabaseSync): void {
       db.exec("ROLLBACK");
       throw error;
     }
+    migrate(db);
     return;
   }
   if (version === 2) {

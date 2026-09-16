@@ -23,3 +23,7 @@ FFmpeg由应用镜像提供，Debian构建有GPL组件；不是本插件MIT许�
 SDK闭包37项均随产物保留完整许可。https-proxy-agent/agent-base的MIT原文位于其README，构建复制README；tr46@0.0.3 npm包遗漏许可，补充来源及限制见[licenses/tr46](licenses/tr46/README.md)。
 
 Phase 3 不增加运行依赖；只复用固定DSH的公开LLM/agent/session/subagent接口及发行preset装载的compaction服务。测试语料为合成文本，不含真实采访资料。
+
+## Phase 4
+
+没有新增运行依赖。长河使用浏览器原生SVG几何API和一个本项目固定路径；没有复制D3实现、字体、图片或图形资产。调研了d3-shape 3.2.0（ISC）、d3-path 3.1.0（ISC），安装动作被环境自动审批拒绝后选用原生API；二者未打包进入本发行。静态HTML使用系统字体，无远端资源。内部任务复用既有DSH模型API；原许可义务不变。

@@ -16,3 +16,11 @@ Source/speaker/recognition/receipt由Host轮询；录音stop后的Blob由Indexed
 新完成assistant的自动TTS由公开eventSource的live append真人输入准备，再以assistant ID检测完成；replace/prepend历史不自动播放。autoplay拒绝显示播放按钮，停止播放释放URL。暂停不把采访永久终止；重新打开可继续。
 
 照片与真正Memory River留后续阶段。移动麦克风需要HTTPS安全上下文，不能禁用浏览器安全机制。
+
+## Phase 4
+
+[MemoryRiver](../src/client/river.tsx)替换placeholder，复用main slot。导航为“讲故事/人生长河”。SVG语义只表示时间，选中时才画≤10相关线；年代列表提供完整键盘操作。未知时间独立列表，区间与candidate同时有文字，不只颜色。
+
+纠正使用简单文本预览，再放入原生composer（没有自动发送）；可继续修改。来源audio为整段原声，不承诺词级对齐。页面5秒轮询有界展示快照；graphRevision不变保留布局，更新时刷新当前节点；生成结果按ID去重，不每次轮询重复下载正文。
+
+生成操作仅显式按钮，轮询持久状态，不显示假百分比。失败不替换上个版本。360px、平板、桌面、200%缩放、reduced-motion的实际证据见应用Phase4；尚未运行不能预先宣称通过。

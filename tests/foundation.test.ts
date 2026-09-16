@@ -40,7 +40,7 @@ test("empty migration, durable source, native serialized correction and memory p
   const root = await temp();
   let app = await Foundation.open(root);
   try {
-    assert.equal((await app.db.call("health", null)).schema, 4);
+    assert.equal((await app.db.call("health", null)).schema, 5);
     const source = await app.fakeDraft("session-a", {
       role: "self",
       authority: "explicit-user",

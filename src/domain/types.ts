@@ -30,6 +30,7 @@ export interface Media {
   captureIncomplete?: "size-limit" | "recorder-error" | "stop-timeout";
 }
 export interface Source {
+  correctionTarget?: { id: string; revision: number };
   id: SourceId;
   sessionId: string;
   mediaId: MediaId | null;

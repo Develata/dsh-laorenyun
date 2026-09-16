@@ -1,3 +1,4 @@
+import { PresentationStorage } from "../derived/storage.ts";
 import { randomInt } from "node:crypto";
 import { schedule, type Region } from "../memory/scheduler.ts";
 import { parseMemo, partialMemo } from "../memory/branch.ts";
@@ -41,6 +42,7 @@ try {
   throw error;
 }
 const graph = new GraphStorage(db);
+const presentation = new PresentationStorage(db, graph);
 function read<T>(sql: string, ...params: string[]): T | null {
   const row = db.prepare(sql).get(...params);
   return row ? (JSON.parse(String(row.json)) as T) : null;
@@ -85,6 +87,79 @@ function handle(r: WorkerRequest): unknown {
   if (Date.now() >= r.deadline)
     throw new DomainError("TIMEOUT", "queued database request expired");
   switch (r.method) {
+    case "river":
+      return presentation.river(r.input);
+    case "memoryDetail":
+      return presentation.detail(r.input.id, r.input.revision);
+    case "correctionCreate":
+      return transaction(() => {
+        const i = r.input,
+          n = graph.node(i.nodeId);
+        if (
+          !n ||
+          n.revision !== i.revision ||
+          !i.text.trim() ||
+          i.text.length > 4000
+        )
+          throw new DomainError(
+            "REVISION_CONFLICT",
+            "current correction target",
+          );
+        if (
+          db
+            .prepare(
+              "SELECT 1 FROM sources WHERE session_id=? AND status='draft'",
+            )
+            .get(i.sessionId)
+        )
+          throw new DomainError("DRAFT_EXISTS", "existing source draft");
+        const s: Source = {
+          id: randomUUID() as SourceId,
+          sessionId: i.sessionId,
+          mediaId: null,
+          rawAsr: "",
+          draft: i.text,
+          draftRevision: 0,
+          speaker: read<Source["speaker"]>(
+            "SELECT json FROM session_speakers WHERE session_id=?",
+            i.sessionId,
+          ) ?? { role: "self", authority: "explicit-user" },
+          status: "draft",
+          createdAt: Date.now(),
+          correctionTarget: { id: n.id, revision: n.revision },
+        };
+        db.prepare("INSERT INTO sources VALUES(?,?,?,?,?)").run(
+          s.id,
+          s.sessionId,
+          null,
+          "draft",
+          JSON.stringify(s),
+        );
+        presentation.correction({
+          sourceId: s.id,
+          nodeId: n.id,
+          revision: n.revision,
+        });
+        return s;
+      });
+    case "correctionIntent":
+      return presentation.correction(r.input);
+    case "derivedBegin":
+      return presentation.begin(r.input);
+    case "derivedGet":
+      return presentation.get(r.input);
+    case "derivedActive":
+      return presentation.active(r.input);
+    case "derivedList":
+      return presentation.list();
+    case "derivedClaim":
+      return presentation.claim();
+    case "derivedUpdate":
+      return presentation.update(r.input);
+    case "derivedRecover":
+      return presentation.recover();
+    case "derivedCancel":
+      return presentation.cancel(r.input);
     case "branchContext": {
       const b = branch(r.input);
       if (!b?.proposalTranscriptId)

@@ -20,3 +20,7 @@ Owner：模块检查与测试入口。产品验收见[应用11](https://github.c
 ## Phase 3
 
 `pnpm check` + `pnpm format:check` + `git diff --check`。`tests/memory.test.ts`使用合成中文、schema-only Phase2 fixture、真实worker/SQLite验证证据、修订、冲突、冷恢复、候选CAS、图完整性、边约束、支线closing和调度种子。真实模型/容器结果只在[应用报告](https://github.com/Develata/laorenyun/blob/main/docs/phase-3.md)声明。普通CI不自动调用付费服务。
+
+## Phase 4
+
+`tests/derived.test.ts`使用真实worker/SQLite及合成来源。覆盖范围见[实现报告](phase-4.md)。实网模型与Docker浏览器验收由应用报告拥有；断言只对实际执行证据成立，实体麦克风仍独立pending。

@@ -281,3 +281,13 @@ cursor绑定graphRevision，变化返回REVISION_CONFLICT要求刷新，不能�
 bindDraft固定(sessionId、sourceIds、speakerRevision、draftGeneration、leaseId)，任何speaker变更先Host ack再解锁发送。客户端只有一个写lease（30秒、10秒续期），Host验证当前lease及状态；过期保留草稿，重新取得后再提交。原生DSH请求并不自动带本项目receipt，需要pre-step从session已准备的binding及native messageId建立关联；该seam必须通过[集成门槛](interview.md)后才能声明可靠。
 
 Remote版本为1；未知字段/大小/enum在边界拒绝。更改state/protocol返回兼容版本或明确不支持，不写“尽量兼容”静默丢字段。权限不是靠把按钮藏起来建立。
+
+## Phase 4 实际契约
+
+后续草图不能覆盖[真实类型](../src/derived/types.ts)。`river`返回≤500摘要及graphRevision/periods/truncated，`memory-detail`按id+可选revision返回有限正文/≤10来源。仅authenticated Host routes提供UI读写，不给模型新增写工具。
+
+`correction`接收sessionId/nodeId/revision/text，原子保存新Source与correction_intents，返回原生draft；不直接改图。正常提案在明确纠正绑定内可追加同ID revision；旧新两版本以resolved Conflict记录使用者更正来源。旧revision或不完整/无证据提案拒绝。
+
+`derived-start`接收客户端幂等id/kind/sessionId/可选personaId或biographyId，返回任务ID；服务端固定模型route和manifest。`derived-list`只返回≤20任务摘要；`derived-view`返回结果，不返回模型路由/提示/manifest原档案。`derived-cancel`取消pending/running，旧产物不动。`export-download`仅允许三种固定文件名，hash验证后私密下载。`source-audio`必须由node revision→transcript→media解析，无任意文件路径。
+
+Persona为观察JSON和inputHash/源ID清单，DB为权威。Biography为固定章节/Section及出处，来源支持完整原句是发布条件；自由改写不在当前renderer能力内。ExportGeneration绑定已发布biography manifest而非实时图。[实现范围与限制](phase-4.md)。

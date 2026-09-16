@@ -11,6 +11,7 @@ import { MEMO_PROMPT, parseMemo, partialMemo } from "./branch.ts";
 export interface Intelligence {
   db: DomainDatabase;
   memory: MemoryService;
+  model: InternalModel;
   activate(parent: Agent, transcriptId: string): Promise<Branch>;
   finish(sessionId: string): Promise<void>;
 }
@@ -208,6 +209,7 @@ export async function installIntelligence(
   ctx.provide("laorenyunMemory", {
     db,
     memory,
+    model,
     activate,
     finish: async (id: string) => {
       await db.call("branchClosing", id);

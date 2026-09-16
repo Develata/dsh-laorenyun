@@ -21,6 +21,60 @@ import type {
   TranscriptSegment,
 } from "../domain/types.ts";
 export interface Operations {
+  river: {
+    input: import("../river/types.ts").RiverQuery;
+    output: import("../river/types.ts").RiverSnapshot;
+  };
+  memoryDetail: {
+    input: { id: string; revision?: number };
+    output: import("../river/types.ts").MemoryDetail;
+  };
+  correctionCreate: {
+    input: {
+      sessionId: string;
+      nodeId: string;
+      revision: number;
+      text: string;
+    };
+    output: Source;
+  };
+  correctionIntent: {
+    input: { sourceId: string; nodeId: string; revision: number };
+    output: null;
+  };
+  derivedBegin: {
+    input: {
+      id: string;
+      kind: import("../derived/types.ts").Kind;
+      sessionId: string;
+      route: import("../memory/model.ts").ModelRoute;
+      personaId?: string;
+      biographyId?: string;
+    };
+    output: import("../derived/types.ts").Generation;
+  };
+  derivedGet: {
+    input: string;
+    output: import("../derived/types.ts").Generation;
+  };
+  derivedActive: {
+    input: import("../derived/types.ts").Kind;
+    output: import("../derived/types.ts").Generation | null;
+  };
+  derivedList: {
+    input: null;
+    output: import("../derived/types.ts").GenerationSummary[];
+  };
+  derivedClaim: {
+    input: null;
+    output: import("../derived/types.ts").Generation | null;
+  };
+  derivedUpdate: {
+    input: import("../derived/types.ts").Generation;
+    output: import("../derived/types.ts").Generation;
+  };
+  derivedRecover: { input: null; output: null };
+  derivedCancel: { input: string; output: null };
   branchProposal: {
     input: {
       parentSessionId: string;

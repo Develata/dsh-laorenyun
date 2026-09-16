@@ -1,3 +1,6 @@
+import { DerivedService } from "./derived/service.ts";
+import { readExport } from "./derived/export.ts";
+import type { Kind } from "./derived/types.ts";
 import { installIntelligence } from "./memory/host.ts";
 import { fixtureAsr, fixtureTts } from "./probes/speech.ts";
 import { createUserMessage, MessageId } from "@deepseek-ai/dsh-llm";
@@ -100,7 +103,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return result.agent;
   };
   const closeIntelligence = await installIntelligence(ctx, app.db, resolve);
+  const derived = new DerivedService(
+    app.db,
+    ctx.laorenyunMemory.model,
+    config.dataDir,
+    (code) => ctx.logger.warn("laorenyun derived: " + code),
+  );
+  await derived.start();
   ctx.effect(() => async () => {
+    await derived.close();
     await closeIntelligence();
     await speech.close();
     await app.close();
@@ -292,6 +303,138 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         },
       }),
     );
+  route("river", async (b) =>
+    app.db.call("river", {
+      start: b.start === undefined ? undefined : Number(b.start),
+      end: b.end === undefined ? undefined : Number(b.end),
+      offset: Number(b.offset ?? 0),
+      drifting: b.drifting === true,
+    }),
+  );
+  route("memory-detail", async (b) =>
+    app.db.call("memoryDetail", {
+      id: String(b.id),
+      revision: b.revision === undefined ? undefined : Number(b.revision),
+    }),
+  );
+  route("derived-list", async () => app.db.call("derivedList", null));
+  route("derived-view", async (b) => {
+    const g = await app.db.call("derivedGet", String(b.id));
+    return {
+      id: g.id,
+      kind: g.kind,
+      state: g.state,
+      result: g.result,
+      progress: g.progress,
+      sampleCount: g.manifest.transcripts.length,
+      stale:
+        g.manifest.graphRevision !==
+        (await app.db.call("timeline", { method: "overview", limit: 1 }))
+          .graphRevision,
+    };
+  });
+  route("derived-start", async (b) => {
+    if (
+      !["persona", "biography", "export"].includes(String(b.kind)) ||
+      !/^[a-f0-9-]{36}$/.test(String(b.id))
+    )
+      throw new DomainError("INVALID_INPUT", "generation");
+    const agent = await reconcile(String(b.sessionId));
+    if (!agent)
+      throw new DomainError("SESSION_ERROR", "main interview required");
+    const c = agent.session.requestHeader()?.config ?? agent.options;
+    if (!c.provider || !c.model)
+      throw new DomainError("MODEL_CONFIG", "model route");
+    const g = await app.db.call("derivedBegin", {
+      id: String(b.id),
+      kind: b.kind as Kind,
+      sessionId: String(b.sessionId),
+      route: { provider: c.provider, model: c.model },
+      personaId: typeof b.personaId === "string" ? b.personaId : undefined,
+      biographyId:
+        typeof b.biographyId === "string" ? b.biographyId : undefined,
+    });
+    derived.tick();
+    return { id: g.id, state: g.state };
+  });
+  route("derived-cancel", async (b) => {
+    await derived.cancel(String(b.id));
+    return null;
+  });
+  route("correction", async (b) => {
+    const sessionId = String(b.sessionId);
+    await resolve(sessionId);
+    return app.db.call("correctionCreate", {
+      sessionId,
+      nodeId: String(b.nodeId),
+      revision: Number(b.revision),
+      text: String(b.text ?? "").trim(),
+    });
+  });
+  ctx.effect(() =>
+    ctx.connection.fetch.register({
+      path: "/api/laorenyun/export-download",
+      methods: ["GET"],
+      requestBody: "buffered",
+      fetch: async (request) => {
+        try {
+          const u = new URL(request.url),
+            g = await app.db.call("derivedGet", u.searchParams.get("id") ?? ""),
+            name = u.searchParams.get("name") ?? "";
+          const bytes = await readExport(config.dataDir, g, name);
+          return new Response(bytes as BodyInit, {
+            headers: {
+              "Content-Type":
+                name === "index.html"
+                  ? "text/html; charset=utf-8"
+                  : name === "memories.json"
+                    ? "application/json"
+                    : "text/markdown; charset=utf-8",
+              "Content-Disposition": `attachment; filename="${name}"`,
+              "Cache-Control": "no-store",
+              "X-Content-Type-Options": "nosniff",
+            },
+          });
+        } catch {
+          return new Response("导出文件暂不可用", { status: 400 });
+        }
+      },
+    }),
+  );
+  ctx.effect(() =>
+    ctx.connection.fetch.register({
+      path: "/api/laorenyun/source-audio",
+      methods: ["GET"],
+      requestBody: "buffered",
+      fetch: async (request) => {
+        try {
+          const u = new URL(request.url),
+            detail = await app.db.call("memoryDetail", {
+              id: u.searchParams.get("node") ?? "",
+              revision: Number(u.searchParams.get("revision")),
+            });
+          const selected = detail.sources.find(
+            (s) => s.transcript.id === u.searchParams.get("transcript"),
+          );
+          if (!selected?.media)
+            throw new DomainError("NOT_FOUND", "original audio");
+          const bytes = await app.recordings.read(
+            selected.media.id,
+            operation(10000),
+          );
+          return new Response(bytes as BodyInit, {
+            headers: {
+              "Content-Type": selected.media.mime,
+              "Cache-Control": "no-store",
+              "X-Content-Type-Options": "nosniff",
+            },
+          });
+        } catch {
+          return new Response("原声暂不可用", { status: 400 });
+        }
+      },
+    }),
+  );
   route("state", async (b) => {
     const sessionId = String(b.sessionId ?? "");
     const agent = sessionId ? await reconcile(sessionId) : null;

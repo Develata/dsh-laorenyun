@@ -89,7 +89,7 @@ test("Phase 2 schema fixture migrates transactionally, preserves testimony and r
     "INSERT INTO transcripts VALUES('t','s','old','m','r','{\"text\":\"保留\"}')",
   );
   migrate(db);
-  assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 4);
+  assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 5);
   assert.equal(db.prepare("SELECT count(*) n FROM transcripts").get()!.n, 1);
   migrate(db);
   db.exec("PRAGMA user_version=99");

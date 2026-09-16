@@ -97,6 +97,7 @@ export interface ExtractionOperation {
   error?: string;
 }
 export interface ExtractionInput {
+  correctionTarget?: { id: string; revision: number };
   operation: ExtractionOperation;
   transcript: TranscriptSegment;
   candidates: Array<

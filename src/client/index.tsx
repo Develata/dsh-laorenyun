@@ -1,3 +1,4 @@
+import { MemoryRiver } from "./river.tsx";
 import { Capture } from "./recorder.ts";
 import { Playback, type PlaybackState } from "./playback.ts";
 import {
@@ -185,18 +186,24 @@ export async function apply(ctx: Context): Promise<void> {
           </button>
         )}
         {notice && <span role="alert">{notice}</span>}
-        <button onClick={openInterview}>采访</button>
+        <button onClick={openInterview}>讲故事</button>
         <button onClick={openRiver}>人生长河</button>
       </nav>
     );
   }
   function River() {
+    const list = useSyncExternalStore(
+      (fn) => ctx.sessions.list.subscribe(fn),
+      () => ctx.sessions.list.getSnapshot(),
+    );
     return (
-      <section style={{ padding: 32 }}>
-        <h1>人生长河</h1>
-        <p>记忆河流将在后续阶段呈现。原始材料与文字校订保存在本机。</p>
-        <button onClick={openInterview}>回到采访</button>
-      </section>
+      <MemoryRiver
+        sessionId={list.current ?? null}
+        onInterview={openInterview}
+        onCorrection={async () => {
+          openInterview();
+        }}
+      />
     );
   }
   function Composer(props: PropsRuntime<"conversation.input.left">) {
@@ -436,6 +443,15 @@ export async function apply(ctx: Context): Promise<void> {
       }, 400);
       return () => clearTimeout(timer);
     }, [input.draft, input.phase, source?.draftRevision]);
+    useEffect(() => {
+      if (
+        source?.correctionTarget &&
+        input.phase === "plain" &&
+        !input.draft &&
+        !processing
+      )
+        injectSource(source);
+    }, [source?.id, input.phase, processing]);
     const injectSource = (s: Source) => {
       const actx = ctx.sessions.scope(sessionId);
       if (!actx) throw new Error("session");

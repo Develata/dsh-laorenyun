@@ -113,6 +113,7 @@ export const EXTRACTION_PROMPT = `你是内部口述史提案抽取器。输入�
 输出 {"proposals":[],"comparisons":[],"resolutions":[]}。
 每个 proposal:
 {"keySentence":"原文完整句子，<=120字，保留否定和不确定修饰，禁止补词", "basis":"stated|inferred", "time":{"start":null,"end":null,"precision":"unknown","certainty":"stated","originalText":""},"evidence":[{"transcriptId":"本次transcript.id","text":"原文逐字引文","field":"claim"}],"people":[],"places":[],"edges":[]}。
+若有correctionTarget，这是用户在所选记忆的纠正入口显式提交的新证言。只提取一个完整更正事件，targetId必须等于correctionTarget.id。缺少完整事实时返回空提案，等待用户补充；禁止靠旧记忆补造没有说出的字句。
 最多6个事件。没有历史内容/仅表示同意、休息、询问时返回空提案。不要把采访控制语当历史。
 月份=12*年+(月-1)，区间端点inclusive。明确1978年9月 start=end=23744；只有1978年则23736..23747，precision=year。未知日期用null/null unknown drifting，不猜出生年份。相对日期没有足够依据用unknown、certainty=inferred，basis=inferred；非字面数值日期不要擅自标stated。
 有年月时originalText必须是本次原文。人物/地点为{name,identity:"explicit|ambiguous",reuseId?:已知实体ID}，name必须出现在引文。王老师之类无确定身份用ambiguous，不把代词变成命名实体。同名不能直接合并，只有上下文明确同一实体可reuseId。cause/process/result可省略；存在时逐字摘录，分别添加对应field的evidence。
