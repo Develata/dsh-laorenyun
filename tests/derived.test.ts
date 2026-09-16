@@ -378,6 +378,7 @@ test("export staging, offline escaped HTML, stable JSON, provenance paths, resta
     assert.equal(json.schemaVersion, 1);
     assert.equal(json.transcriptRevisions[0].id, t.id);
     assert.equal(json.includedMedia, false);
+    assert.equal(json.biographyManifest.generation.model, route.model);
     exp.result = await publishExport(root, exp, AbortSignal.timeout(10000));
     await publish(db, exp);
     assert.equal(

@@ -24,6 +24,20 @@ export interface Manifest {
   persona: Persona | null;
   biography: Biography | null;
   parentGenerationId: string | null;
+  personaMetadata?: {
+    createdAt: number;
+    inputHash: string;
+    model: string;
+    provider: string;
+    promptVersion: string;
+  };
+  biographyMetadata?: {
+    createdAt: number;
+    inputHash: string;
+    model: string;
+    provider: string;
+    promptVersion: string;
+  };
 }
 export interface Persona {
   id: string;

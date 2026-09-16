@@ -132,10 +132,20 @@ export class PresentationStorage {
           "BIOGRAPHY_REQUIRED",
           "published generation required",
         );
+      const p = b.manifest.persona ? this.get(b.manifest.persona.id) : null;
+      const metadata = (g: Generation) => ({
+        createdAt: g.createdAt,
+        inputHash: g.inputHash,
+        model: g.route.model,
+        provider: g.route.provider,
+        promptVersion: g.promptVersion,
+      });
       return {
         ...b.manifest,
         biography: b.result as Manifest["biography"],
         parentGenerationId: b.id,
+        biographyMetadata: metadata(b),
+        ...(p ? { personaMetadata: metadata(p) } : {}),
       };
     }
     const nodes = this.rows<GraphNode>(
