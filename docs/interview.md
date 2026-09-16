@@ -31,3 +31,5 @@ Client只在活动会话新增真人event时准备朗读；历史replace/prepend
 参见[实现边界](phase-3.md)。`system-prompt/assemble`贡献可追溯context snapshot，不修改底层llm/stream历史。`interview_propose_branch`只登记主题；`interview_accept_branch`必须引用最新且晚于提议的真人回答，经Host明确意愿规则才spawn。第五答使用公开session.append/flush写入原生历史后pre-step reject，阻止普通Branch模型再发问。关闭任务复用DSH llm.stream，tools为空；JSON失败保存partial并回流。Main回流消息source.kind=plugin，不计真人答案。
 
 老人界面通过既有session导航进入支线，关闭后回到Main；不增加第二套聊天编辑器。一个活跃支线，旧Phase1探针仍只在显式dev/probes下可用。
+
+Branch初始化仅带topic、returnAnchor、提议对应的原始transcript最多2000字/显式speaker，以及该来源直接支持的最多6条节点关键句；不fork完整Main历史。待激活proposal收到明确拒绝时由接纳层直接cancelled，不依赖模型调用激活工具。Main上下文中的currentTimeRegion仅取自身session最近confirmed锚点，支线时间不会覆写它。

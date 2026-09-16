@@ -66,6 +66,7 @@ export async function installIntelligence(
     if (opening.has(b.id)) return b;
     opening.add(b.id);
     try {
+      const relevant = await db.call("branchContext", b.sessionId);
       const children = await ctx.subagents.listChildren(
         parent.id,
         AbortSignal.timeout(5000),
@@ -84,6 +85,7 @@ export async function installIntelligence(
                   role: "isolated-oral-history-branch",
                   topic: b.topic,
                   returnAnchor: b.returnAnchor,
+                  relevant,
                   policy:
                     "只围绕支线每次一个问题；不加载主线全历史；最多五次真人答案；愿意停止随时finish。",
                 }),

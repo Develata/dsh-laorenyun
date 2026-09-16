@@ -120,6 +120,17 @@ export interface Operations {
       blocked: boolean;
     };
   };
+  branchContext: {
+    input: string;
+    output: {
+      source: {
+        id: string;
+        text: string;
+        speaker: TranscriptSegment["speaker"];
+      };
+      memories: { id: string; keySentence: string }[];
+    };
+  };
   listTranscripts: { input: string; output: TranscriptSegment[] };
   putMemory: {
     input: { node: MemoryNode; expectedRevision: number };

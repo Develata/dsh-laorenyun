@@ -43,3 +43,5 @@ BranchMemo.new_memory_candidates 当前固定空数组：每条真实支线答�
 真实合成支线中观察到分类器把“常在放学后补习”与“每周三去老师家补习”标为possible_conflict。收紧后possible只降为candidate，不创建Conflict；仅material_conflict可开冲突。不安全的重复事件改述也不会另造节点，保留failed操作供后续澄清。旧测试噪声保留为调查证据，不静默清理历史。
 
 正常关闭时内部模型取消不记为终态failed，保留running/proposed，由下次启动重新领取；真正的网络/格式/语义错误仍显式failed。测试覆盖运行中取消、重开、唯一节点，另有真实Compose中断抽取验证。Memo的source_turns必须唯一且完整匹配真实支线答案。
+
+Main紧凑索引包含本session最近confirmed时间区间；调度器收到null月份时采用该区间起点，支线/其他session新日期不会替换Main锚点。该默认值及G/C/U/R一并写入决策，仍以当前对话显式提供的月份为优先。

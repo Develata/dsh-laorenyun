@@ -85,6 +85,24 @@ function handle(r: WorkerRequest): unknown {
   if (Date.now() >= r.deadline)
     throw new DomainError("TIMEOUT", "queued database request expired");
   switch (r.method) {
+    case "branchContext": {
+      const b = branch(r.input);
+      if (!b?.proposalTranscriptId)
+        throw new DomainError("NOT_FOUND", "branch proposal source");
+      const t = graph.transcript(b.proposalTranscriptId);
+      if (t.sessionId !== b.parentSessionId)
+        throw new DomainError("INVALID_SOURCE", "branch parent");
+      const memories = db
+        .prepare(
+          "SELECT DISTINCT r.id,json_extract(r.json,'$.keySentence') keySentence FROM source_refs s JOIN memory_revisions r ON r.id=s.node_id AND r.revision=s.revision JOIN memory_current c ON c.id=r.id AND c.revision=r.revision WHERE s.transcript_id=? LIMIT 6",
+        )
+        .all(t.id)
+        .map((n) => ({ id: String(n.id), keySentence: String(n.keySentence) }));
+      return {
+        source: { id: t.id, text: t.text.slice(0, 2000), speaker: t.speaker },
+        memories,
+      };
+    }
     case "branchProposal":
       return transaction(() => {
         const i = r.input,
@@ -297,7 +315,8 @@ function handle(r: WorkerRequest): unknown {
         const result = schedule({
           graphRevision: graph.revision(),
           regions,
-          currentMonth: i.currentMonth,
+          currentMonth:
+            i.currentMonth ?? graph.region(i.sessionId)?.start ?? null,
           deferred: deferred.includes("*")
             ? regions.map((r) => r.id)
             : deferred,
@@ -658,6 +677,18 @@ function handle(r: WorkerRequest): unknown {
         saveSource({ ...s, status: "submitted", draft: ref.text });
         graph.enqueue(t);
         graph.defer(t);
+        if (
+          !b &&
+          /^(这个(?:话题|故事)?(?:我)?|今天|还是)?(不想|不愿|先不|以后再|先跳过|不要)/.test(
+            t.text.trim(),
+          )
+        ) {
+          const proposed = read<Branch>(
+            "SELECT json FROM branches WHERE parent_session_id=? AND state='proposed'",
+            i.sessionId,
+          );
+          if (proposed) saveBranch({ ...proposed, state: "cancelled" });
+        }
         if (b) {
           db.prepare("INSERT INTO branch_answers VALUES(?,?,?,?)").run(
             b.id,

@@ -433,6 +433,10 @@ test("real branch states: proposal != consent, five human answers enter closing;
       transcriptId: source.id,
     });
     assert.equal(b.state, "proposed");
+    assert.equal(
+      (await db.call("branchContext", b.sessionId)).source.id,
+      source.id,
+    );
     await assert.rejects(
       db.call("branchConsent", {
         parentSessionId: "main",
@@ -837,6 +841,59 @@ test("graceful extraction cancellation resumes after restart exactly once", asyn
     assert.equal(await db.call("memoryClaim", null), null);
   } finally {
     await resumed.close();
+    await db.close();
+  }
+});
+
+test("scheduler and Main overview default to their own latest stated time region", async () => {
+  const db = await DomainDatabase.open(await temp());
+  try {
+    const a = await human(db, "1978年，我去合肥读书。");
+    await apply(db, proposal(a, time(1978)));
+    const b = await human(db, "1982年，我参加工作。", "other-session");
+    await apply(db, proposal(b, time(1982)));
+    assert.deepEqual(
+      (await db.call("timeline", { method: "overview", sessionId: "main" }))
+        .currentRegion,
+      { start: 1978 * 12, end: 1978 * 12 + 11 },
+    );
+    const t = await human(db, "这段话题已经讲完，请继续。");
+    const result = await db.call("schedule", {
+      sessionId: "main",
+      transcriptId: t.id,
+      currentMonth: null,
+      boundary: true,
+      userChoseTopic: false,
+    });
+    assert.equal(result.currentMonth, 1978 * 12);
+    assert.equal(result.candidates[0]!.R, 1);
+  } finally {
+    await db.close();
+  }
+});
+
+test("explicit refusal cancels proposal without asking the model to activate it", async () => {
+  const db = await DomainDatabase.open(await temp());
+  try {
+    const t = await human(db, "王老师帮助过我。");
+    const b = await db.call("branchProposal", {
+      parentSessionId: "main",
+      transcriptId: t.id,
+      topic: "王老师",
+      returnAnchor: "上学",
+    });
+    await human(db, "先不聊这段故事。");
+    assert.equal((await db.call("getBranch", b.sessionId))!.state, "cancelled");
+    const next = await human(db, "后来我和同学去春游。");
+    const proposal = await db.call("branchProposal", {
+      parentSessionId: "main",
+      transcriptId: next.id,
+      topic: "春游",
+      returnAnchor: "上学",
+    });
+    assert.notEqual(proposal.id, b.id);
+    assert.equal(proposal.state, "proposed");
+  } finally {
     await db.close();
   }
 });

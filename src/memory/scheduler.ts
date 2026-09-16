@@ -31,6 +31,7 @@ export function schedule(i: ScheduleInput) {
   if (!i.boundary || i.userChoseTopic)
     return {
       graphRevision: i.graphRevision,
+      currentMonth: i.currentMonth,
       seed: i.seed,
       temperature,
       weights,
@@ -72,6 +73,7 @@ export function schedule(i: ScheduleInput) {
   }
   return {
     graphRevision: i.graphRevision,
+    currentMonth: i.currentMonth,
     seed: i.seed,
     temperature,
     weights,

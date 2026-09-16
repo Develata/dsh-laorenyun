@@ -95,7 +95,7 @@ export function installMemoryTools(ctx: Context) {
       },
       execute: async (args, exec) => {
         const budget = exec.agent ? budgets.get(exec.agent) : undefined;
-        if (!budget)
+        if (!exec.agent || !budget)
           throw new DomainError("SESSION_REQUIRED", "timeline budget");
         if (++budget.calls > 6)
           throw new DomainError("TOOL_BUDGET", "six memory queries per turn");
@@ -107,6 +107,7 @@ export function installMemoryTools(ctx: Context) {
               ),
             ) as Omit<TimelineQuery, "method">),
             method,
+            sessionId: String(exec.agent.id),
           }),
         );
         if (budget.chars + output.length > 12000)
@@ -273,6 +274,7 @@ export function installMemoryTools(ctx: Context) {
       const [overview, conflicts, unresolved] = await Promise.all([
         ctx.laorenyunMemory.db.call("timeline", {
           method: "overview",
+          sessionId: String(context.agent.id),
           limit: 12,
         }),
         ctx.laorenyunMemory.db.call("timeline", {
@@ -289,6 +291,7 @@ export function installMemoryTools(ctx: Context) {
         derived: true,
         graphRevision: overview.graphRevision,
         generationVersion: 1,
+        currentTimeRegion: overview.currentRegion,
         nodes: overview.items,
         conflicts: conflicts.items,
         unresolved: unresolved.items,
@@ -303,6 +306,7 @@ export function installMemoryTools(ctx: Context) {
             : JSON.stringify({
                 graphRevision: overview.graphRevision,
                 derived: true,
+                currentTimeRegion: overview.currentRegion,
                 truncated: true,
                 nodes: overview.items.slice(0, 6),
                 conflicts: conflicts.items.slice(0, 1),

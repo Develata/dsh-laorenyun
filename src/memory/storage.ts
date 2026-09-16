@@ -636,6 +636,17 @@ export class GraphStorage {
         JSON.stringify({ evidence, basis: "stated" }),
       );
   }
+  region(sessionId: string): { start: number; end: number } | null {
+    const r = this.db
+      .prepare(
+        `SELECT json_extract(r.json,'$.time.start') start,json_extract(r.json,'$.time.end') end
+      FROM memory_revisions r JOIN memory_current c USING(id,revision) JOIN transcripts t ON t.id=r.transcript_id
+      WHERE t.session_id=? AND json_extract(r.json,'$.status')='confirmed' AND json_extract(r.json,'$.placement')='anchored'
+      ORDER BY r.rowid DESC LIMIT 1`,
+      )
+      .get(sessionId);
+    return r ? { start: Number(r.start), end: Number(r.end) } : null;
+  }
   query(q: TimelineQuery): Page {
     const rev = this.revision(),
       limit = Math.min(
@@ -787,6 +798,9 @@ export class GraphStorage {
     }
     return {
       items,
+      ...(q.method === "overview" && q.sessionId
+        ? { currentRegion: this.region(q.sessionId) }
+        : {}),
       graphRevision: rev,
       truncated,
       ...(truncated ? { cursor: `${rev}:${offset + items.length}` } : {}),

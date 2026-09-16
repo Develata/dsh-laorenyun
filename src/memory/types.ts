@@ -125,6 +125,8 @@ export type TimelineMethod =
   | "get_drifting_memories"
   | "overview";
 export interface TimelineQuery {
+  /** Host-bound session; never supplied by model arguments. */
+  sessionId?: string;
   method: TimelineMethod;
   id?: string;
   revision?: number;
@@ -138,6 +140,7 @@ export interface TimelineQuery {
   cursor?: string;
 }
 export interface Page {
+  currentRegion?: { start: number; end: number } | null;
   items: unknown[];
   graphRevision: number;
   truncated: boolean;
