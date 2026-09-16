@@ -192,6 +192,8 @@ test("immutable persona, self only, quote validation, unknowns and no psychologi
     await human(db, "父亲不这样说话。");
     const g = await begin(db, "persona");
     assert.equal(g.manifest.transcripts.length, 1);
+    assert.deepEqual(g.manifest.nodes, []);
+    assert.deepEqual(g.manifest.branchMemos, []);
     assert.equal(g.manifest.transcripts[0]!.id, t.id);
     const data = {
       observations: [

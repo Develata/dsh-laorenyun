@@ -148,17 +148,37 @@ export class PresentationStorage {
         ...(p ? { personaMetadata: metadata(p) } : {}),
       };
     }
-    const nodes = this.rows<GraphNode>(
-      "SELECT r.json FROM memory_revisions r JOIN memory_current c USING(id,revision) ORDER BY r.id LIMIT 201",
-    );
+    if (
+      kind !== "persona" &&
+      Number(
+        this.db
+          .prepare(
+            "SELECT COALESCE(sum(length(json)),0) n FROM memory_revisions",
+          )
+          .get()!.n,
+      ) > 1500000
+    )
+      throw new DomainError(
+        "GENERATION_LIMIT",
+        "revision snapshot exceeds character budget",
+      );
+    const nodes =
+      kind === "persona"
+        ? []
+        : this.rows<GraphNode>(
+            "SELECT r.json FROM memory_revisions r JOIN memory_current c USING(id,revision) ORDER BY r.id LIMIT 201",
+          );
     if (nodes.length > 200)
       throw new DomainError(
         "GENERATION_LIMIT",
         "at most 200 current memories per generation",
       );
-    const revisions = this.rows<GraphNode>(
-      "SELECT r.json FROM memory_revisions r ORDER BY r.id,r.revision LIMIT 1001",
-    );
+    const revisions =
+      kind === "persona"
+        ? []
+        : this.rows<GraphNode>(
+            "SELECT r.json FROM memory_revisions r ORDER BY r.id,r.revision LIMIT 1001",
+          );
     if (revisions.length > 1000)
       throw new DomainError(
         "GENERATION_LIMIT",
@@ -170,6 +190,11 @@ export class PresentationStorage {
         ...(n.evidence ?? []).map((e) => e.transcriptId),
       ]),
     );
+    if (ids.size > 500)
+      throw new DomainError(
+        "GENERATION_LIMIT",
+        "at most 500 source transcripts",
+      );
     const transcripts =
       kind === "persona"
         ? this.rows<TranscriptSegment>(
@@ -182,21 +207,23 @@ export class PresentationStorage {
         (id) =>
           this.rows<Source>("SELECT json FROM sources WHERE id=?", id)[0]!,
       );
-    const media = [
+    const media: Media[] = [];
+    for (const id of [
       ...new Set(
         sources
           .map((s) => s.mediaId)
           .filter((id): id is NonNullable<typeof id> => !!id),
       ),
-    ]
-      .sort()
-      .flatMap((id) =>
-        this.rows<Media>(
-          "SELECT json FROM media WHERE id=? OR json_extract(json,'$.originalMediaId')=?",
-          id,
-          id,
-        ),
+    ].sort()) {
+      const batch = this.rows<Media>(
+        "SELECT json FROM media WHERE id=? OR json_extract(json,'$.originalMediaId')=? ORDER BY id LIMIT 101",
+        id,
+        id,
       );
+      if (batch.length > 100 || media.length + batch.length > 1000)
+        throw new DomainError("GENERATION_LIMIT", "media metadata cap");
+      media.push(...batch);
+    }
     const persona = personaId ? this.get(personaId) : null;
     if (
       persona &&
@@ -212,19 +239,34 @@ export class PresentationStorage {
       transcripts,
       sources,
       media,
-      people: this.db
-        .prepare("SELECT * FROM people ORDER BY id LIMIT 2001")
-        .all() as unknown as Manifest["people"],
-      places: this.db
-        .prepare("SELECT * FROM places ORDER BY id LIMIT 2001")
-        .all() as unknown as Manifest["places"],
-      edges: this.db
-        .prepare("SELECT * FROM memory_edges ORDER BY id LIMIT 2001")
-        .all(),
-      conflicts: this.rows("SELECT json FROM conflicts ORDER BY id LIMIT 201"),
-      branchMemos: this.rows(
-        "SELECT json FROM branch_memos ORDER BY branch_id LIMIT 101",
-      ),
+      people:
+        kind === "persona"
+          ? []
+          : (this.db
+              .prepare("SELECT * FROM people ORDER BY id LIMIT 2001")
+              .all() as unknown as Manifest["people"]),
+      places:
+        kind === "persona"
+          ? []
+          : (this.db
+              .prepare("SELECT * FROM places ORDER BY id LIMIT 2001")
+              .all() as unknown as Manifest["places"]),
+      edges:
+        kind === "persona"
+          ? []
+          : this.db
+              .prepare("SELECT * FROM memory_edges ORDER BY id LIMIT 2001")
+              .all(),
+      conflicts:
+        kind === "persona"
+          ? []
+          : this.rows("SELECT json FROM conflicts ORDER BY id LIMIT 201"),
+      branchMemos:
+        kind === "persona"
+          ? []
+          : this.rows(
+              "SELECT json FROM branch_memos ORDER BY branch_id LIMIT 101",
+            ),
       persona: (persona?.result as Manifest["persona"]) ?? null,
       biography: null,
       parentGenerationId: null,
@@ -327,7 +369,7 @@ export class PresentationStorage {
       this.db.prepare("SELECT count(*) n " + base).get(...args)!.n,
     );
     const all = this.rows<GraphNode>(
-      "SELECT r.json " +
+      "SELECT json_object('id',r.id,'revision',r.revision,'keySentence',json_extract(r.json,'$.keySentence'),'time',json_extract(r.json,'$.time'),'placement',json_extract(r.json,'$.placement'),'status',COALESCE(json_extract(r.json,'$.status'),'confirmed')) json " +
         base +
         " ORDER BY json_extract(r.json,'$.time.start'),r.id LIMIT 500 OFFSET ?",
       ...args,
