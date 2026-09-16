@@ -3,7 +3,7 @@
 Owner：插件slot/state/theme适配；产品要求见[应用06](https://github.com/Develata/laorenyun/blob/main/docs/06-ui-ux.md)。代码在[src/client](../src/client/)，证据见[phase-2](phase-2.md)。
 
 - 原生conversation与composer保留。左侧slot贡献speaker、主麦克风、保存/识别状态、恢复草稿、再听、暂停；不新建编辑器。
-- sidebar贡献采访/人生长河；无session时用公开sessions.create/open；river是main placeholder，未实现D3。
+- sidebar贡献采访/人生长河；无session时用公开sessions.create/open；river在Phase4由main slot的真实SVG长河替代。
 - theme通过官方注册和alias覆盖，暖白/浅绿/深灰，原生字号17；不改Web核心。
 - 普通profile通过公开keyed chat slots隐藏system/context/turn-process，并呈现不含技术marker的用户正文。开发profile保留诊断与显式fixture。权限仍由Host/preset控制，隐藏不是授权。
 
@@ -15,7 +15,7 @@ Source/speaker/recognition/receipt由Host轮询；录音stop后的Blob由Indexed
 
 新完成assistant的自动TTS由公开eventSource的live append真人输入准备，再以assistant ID检测完成；replace/prepend历史不自动播放。autoplay拒绝显示播放按钮，停止播放释放URL。暂停不把采访永久终止；重新打开可继续。
 
-照片与真正Memory River留后续阶段。移动麦克风需要HTTPS安全上下文，不能禁用浏览器安全机制。
+照片仍属后续P1；真实长河见下方Phase4。移动麦克风需要HTTPS安全上下文，不能禁用浏览器安全机制。
 
 ## Phase 4
 

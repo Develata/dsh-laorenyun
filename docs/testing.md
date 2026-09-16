@@ -15,7 +15,7 @@ Owner：模块检查与测试入口。产品验收见[应用11](https://github.c
 
 可选真实云测试：显式配置私密环境后 `node scripts/cloud-smoke.mjs --cloud /path/to/untracked-audio`；参数可省略音频只测TTS。普通CI不执行；不提交私密音频、文字或凭据。实测输出只保留长度/时延/引擎等非敏感证据。
 
-精确已执行结果及未覆盖项见[phase-2](phase-2.md)。未来memory extraction/graph查询/river/export测试属于对应阶段，不能把设计清单写成通过记录。
+精确已执行结果及未覆盖项见[phase-2](phase-2.md)。memory extraction/graph查询与river/export的实际检查分别见Phase3/4报告，不能把完整产品设计清单写成通过记录。
 
 ## Phase 3
 

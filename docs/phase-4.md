@@ -1,6 +1,6 @@
 # Phase 4：长河、纠正与派生阅读版本
 
-Owner：插件实现和确定性测试。发行、实网、浏览器和最终结论由[应用 Phase 4](https://github.com/Develata/laorenyun/blob/main/docs/phase-4.md)拥有。当前实现进入容器验收，不能把本页当作已通过所有门禁。
+Owner：插件实现和确定性测试。发行、实网、浏览器和最终结论由[应用 Phase 4](https://github.com/Develata/laorenyun/blob/main/docs/phase-4.md)拥有。实现与容器验收已完成；具体门禁结论以应用报告为准，Phase2真人硬件仍独立pending。
 
 Phase 2 R2 实体麦克风、R3 真人采访恢复仍 pending。
 
