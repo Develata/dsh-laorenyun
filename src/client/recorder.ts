@@ -137,7 +137,10 @@ export class Capture {
   private snapshot(): CapturedRecording {
     return {
       blob: new Blob(this.parts, {
-        type: this.recorder?.mimeType || "audio/webm",
+        type:
+          this.recorder?.mimeType ||
+          this.parts.find((part) => part.type)?.type ||
+          "application/octet-stream",
       }),
       durationMs: Math.max(
         1,

@@ -74,9 +74,11 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
     setError("");
     try {
       await fn();
-    } catch {
+    } catch (error) {
       setError(
-        "这一步没有完成，之前的记录和已生成的版本仍然保留。请稍后重试。",
+        error instanceof Error && error.message === "GENERATION_LIMIT"
+          ? "这份档案超过当前单次整理上限，暂不能生成新自传。已保存的记忆和旧版本不受影响。"
+          : "这一步没有完成，之前的记录和已生成的版本仍然保留。请稍后重试。",
       );
     } finally {
       lock.current = false;

@@ -8,6 +8,7 @@
     "src/probes/**/*.ts",
     "tests/**/*.ts",
     "src/interviewer.ts",
-    "src/speech/**/*.ts"
+    "src/speech/**/*.ts",
+    "scripts/demo.ts"
   ]
 }

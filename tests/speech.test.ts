@@ -162,6 +162,35 @@ test("real WebM Opus normalization verifies PCM shape and rejects failures/timeo
     assert.equal(format.sampleRate, 16000);
     assert.ok(format.durationMs >= 990 && format.durationMs < 1100);
     assert.deepEqual(await readFile(join(root, "input.webm")), original);
+    for (const [extension, codec] of [
+      ["mp4", "aac"],
+      ["ogg", "libopus"],
+      ["mp3", "libmp3lame"],
+    ]) {
+      const file = join(root, `input.${extension}`);
+      execFileSync(
+        "/usr/bin/ffmpeg",
+        [
+          "-nostdin",
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=frequency=440:duration=1",
+          "-c:a",
+          codec!,
+          file,
+        ],
+        { timeout: 10000 },
+      );
+      const normalized = inspectWav(
+        await normalizeAudio(await readFile(file), root, operation(10000)),
+      );
+      assert.equal(normalized.channels, 1);
+      assert.equal(normalized.sampleRate, 16000);
+      assert.ok(normalized.durationMs >= 990 && normalized.durationMs < 1100);
+    }
     await assert.rejects(
       normalizeAudio(new Uint8Array([0, 1]), root, operation()),
       /NORMALIZATION_FAILED/,

@@ -24,3 +24,7 @@ Owner：模块检查与测试入口。产品验收见[应用11](https://github.c
 ## Phase 4
 
 `tests/derived.test.ts`使用真实worker/SQLite及合成来源。覆盖范围见[实现报告](phase-4.md)。实网模型与Docker浏览器验收由应用报告拥有；断言只对实际执行证据成立，实体麦克风仍独立pending。
+
+## 最终发行
+
+执行`pnpm check`、`pnpm format:check`；`.github/workflows/ci.yml`不调用付费云。可选独立空目录运行demo CLI的`--scale`，事实/限制见[Phase5](phase-5.md)。

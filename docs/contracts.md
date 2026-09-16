@@ -293,3 +293,5 @@ Remote版本为1；未知字段/大小/enum在边界拒绝。更改state/protoco
 Persona为观察JSON和inputHash/源ID清单，DB为权威。Biography为固定章节/Section及出处，来源支持完整原句是发布条件；自由改写不在当前renderer能力内。ExportGeneration绑定已发布biography manifest而非实时图。[实现范围与限制](phase-4.md)。
 
 RiverNode.hasOpenConflict是展示投影标志，不改MemoryNode.status。旧自传详情传固定revision，只有显式“查看现在的记忆”才转当前。派生list至多20条（最近17条与三种active合并），长期失败重试不能使最后good版本入口消失。Persona不足观察移入unknown；章节标题限制来源原词/中性词组，年代排序代码保证。
+
+Phase5 HTTP边界：普通JSON请求streaming读取≤80,000 bytes/10秒、解码≤20,000字符；音频边界不变。单次派生超限以GENERATION_LIMIT明确失败，客户端显示容量限制，旧版本不变。

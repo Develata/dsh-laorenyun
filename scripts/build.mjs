@@ -4,6 +4,7 @@ await mkdir("lib", { recursive: true });
 await build({
   entryPoints: {
     index: "src/index.ts",
+    demo: "scripts/demo.ts",
     interviewer: "src/interviewer.ts",
     "storage/worker": "src/storage/worker.ts",
   },

@@ -2,7 +2,7 @@
 
 Owner：插件存储实现和恢复协议。产品语义见[应用04](https://github.com/Develata/laorenyun/blob/main/docs/04-memory-graph.md)，来源原则见[应用07](https://github.com/Develata/laorenyun/blob/main/docs/07-provenance-and-integrity.md)。实现证据见 [Phase 3](phase-3.md)。
 
-## 当前 schema 4
+## 当前 schema 5
 
 一个 `node:sqlite` worker 拥有 `/app/data/laorenyun.db`。媒体文件不进SQLite，DSH日志独立保留；不访问DSH私有SQL表。`migrations.ts`逐版本事务迁移，拒绝未来版本，不重置已有数据。WAL、外键和FULL同步；仅支持本地普通文件系统。
 
@@ -20,7 +20,7 @@ Owner：插件存储实现和恢复协议。产品语义见[应用04](https://gi
 | branches / branch_answers / branch_memos | 同意、原生child身份、真人去重计数、真实/partial memo |
 | scheduler_decisions / interview_deferrals | 可重现评分和种子、暂缓窗口 |
 
-字段和worker请求的唯一实现权威为 [types](../src/memory/types.ts)、[protocol](../src/storage/protocol.ts)、[DDL](../src/storage/migrations.ts)。未实现人物画像/自传/导出表，不为空概念提前建表。dismissed目前是领域状态预留，没有自动驳回冲突入口。
+字段和worker请求的唯一实现权威为 [types](../src/memory/types.ts)、[protocol](../src/storage/protocol.ts)、[DDL](../src/storage/migrations.ts)。Phase4增加correction_intents、derived_generations和derived_active，共用有界任务生命周期。dismissed目前是领域状态预留，没有自动驳回冲突入口。
 
 ## 抽取与修订
 

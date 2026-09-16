@@ -72,8 +72,9 @@ test("MediaRecorder permission failure, double start, stop and track cleanup", a
     assert.equal(stops, 1);
     assert.equal(recorder.state, "idle");
     await recorder.start();
+    FakeRecorder.last.mimeType = "";
     FakeRecorder.last.ondataavailable?.({
-      data: new Blob(["preserved partial"]),
+      data: new Blob(["preserved partial"], { type: "audio/mp4" }),
     });
     FakeRecorder.last.stop = () => {
       FakeRecorder.last.state = "inactive";
@@ -84,6 +85,7 @@ test("MediaRecorder permission failure, double start, stop and track cleanup", a
     const partial = await delayed;
     assert.equal(await partial.blob.text(), "preserved partial");
     assert.equal(partial.incomplete, "stop-timeout");
+    assert.equal(partial.blob.type, "audio/mp4");
     assert.equal(recorder.state, "idle");
     assert.equal(stops, 2);
     t.mock.timers.reset();

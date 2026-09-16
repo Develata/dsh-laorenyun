@@ -789,7 +789,7 @@ export async function apply(ctx: Context): Promise<void> {
             color: "var(--dsw-alias-label-secondary)",
           }}
         >
-          录音保存在本机，腾讯云处理语音识别与朗读。整理出的文字可以修改，点击发送后才交给采访者。
+          录音保存在本机，腾讯云处理语音识别与朗读。整理出的文字可以修改，点击发送后交给配置的云端模型采访和整理。
         </small>
         {uncertain && (
           <p role="status">

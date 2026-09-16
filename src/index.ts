@@ -264,7 +264,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       },
     }),
   );
-  // Supported authenticated Fetch routes. This is a bounded Phase 1 probe API,
+  // Supported authenticated Fetch routes. This is a bounded application API,
   // not a replacement transport, router, or general RPC framework.
   const route = (
     name: string,
@@ -274,10 +274,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       ctx.connection.fetch.register({
         path: `/api/laorenyun/${name}`,
         methods: ["POST"],
-        requestBody: "buffered",
+        requestBody: "streaming",
         fetch: async (request) => {
           try {
-            const bytes = await request.text();
+            const bytes = new TextDecoder().decode(
+              await boundedBody(
+                request.body,
+                80000,
+                AbortSignal.any([request.signal, AbortSignal.timeout(10000)]),
+              ),
+            );
             if (bytes.length > 20000)
               throw new DomainError("INVALID_INPUT", "request too large");
             const body: unknown = JSON.parse(bytes);
@@ -707,7 +713,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     });
   }
   ctx.logger.info(
-    "laorenyun: database ready; schema=4; probes=" + String(config.probes),
+    "laorenyun: database ready; schema=5; probes=" + String(config.probes),
   );
 }
 
