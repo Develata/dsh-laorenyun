@@ -626,18 +626,16 @@ export class GraphStorage {
         throw new DomainError("PRECEDES_CYCLE", "cycle or traversal budget");
     }
     if (kind === "RELATES_TO" && from > to) [from, to] = [to, from];
-    this.db
-      .prepare("INSERT OR IGNORE INTO memory_edges VALUES(?,?,?,?,?)")
-      .run(
-        randomUUID(),
-        from,
-        to,
-        kind,
-        JSON.stringify({
-          evidence,
-          basis: kind === "CAUSES" ? "stated" : "inferred",
-        }),
-      );
+    this.db.prepare("INSERT OR IGNORE INTO memory_edges VALUES(?,?,?,?,?)").run(
+      randomUUID(),
+      from,
+      to,
+      kind,
+      JSON.stringify({
+        evidence,
+        basis: kind === "CAUSES" ? "stated" : "inferred",
+      }),
+    );
   }
   region(sessionId: string): { start: number; end: number } | null {
     const r = this.db
