@@ -166,6 +166,21 @@ test("selected correction uses native source, cancelled draft no graph change, s
     const snapshot = await begin(db, "biography");
     assert.equal(snapshot.manifest.conflicts[0]!.status, "resolved");
     await db.call("derivedCancel", snapshot.id);
+    const punctuation = await db.call("correctionCreate", {
+      sessionId: "main",
+      nodeId: id,
+      revision: 2,
+      text: "1977年，我进入合肥六中",
+    });
+    const plain = await human(
+      db,
+      sourceMarker(punctuation.id) + punctuation.draft,
+    );
+    await extract(db, plain, 1977, id);
+    assert.equal((await db.call("getMemory", id))!.revision, 3);
+    const after = await begin(db, "biography");
+    assert.equal(after.manifest.conflicts.length, 1);
+    await db.call("derivedCancel", after.id);
     assert.deepEqual(await db.call("graphIntegrity", null), []);
     await assert.rejects(
       db.call("correctionCreate", {

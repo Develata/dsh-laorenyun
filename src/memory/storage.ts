@@ -545,7 +545,14 @@ export class GraphStorage {
         if (n.evidence.length > 100)
           throw new DomainError("EVIDENCE_LIMIT", "revision evidence cap");
         this.write(n);
-        if (explicitCorrection && old && old.keySentence !== n.keySentence) {
+        // A trailing sentence mark is presentation, not competing testimony.
+        // Keep internal punctuation (especially decimal points) meaningful.
+        if (
+          explicitCorrection &&
+          old &&
+          old.keySentence.trim().replace(/[。！？.!?]+$/u, "") !==
+            n.keySentence.trim().replace(/[。！？.!?]+$/u, "")
+        ) {
           const conflict: Conflict = {
             id: randomUUID(),
             left: { id: old.id, revision: old.revision },
