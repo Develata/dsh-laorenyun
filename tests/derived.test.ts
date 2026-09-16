@@ -448,3 +448,123 @@ test("bounded derived service uses existing model contract, stores sections, no 
     await db.close();
   }
 });
+
+test("river bounded 500, aggregate periods, paged access, revision refresh and re-anchor keep ID", async () => {
+  const { db } = await fixture();
+  try {
+    const t = await human(db, "合成规模验收。");
+    let first = "";
+    for (let i = 0; i < 501; i++) {
+      const id = randomUUID();
+      if (!i) first = id;
+      await db.call("putMemory", {
+        expectedRevision: 0,
+        node: {
+          id: id as import("../src/domain/types.ts").NodeId,
+          revision: 1,
+          keySentence: t.text,
+          time: {
+            start: i === 0 ? null : 24000 + i,
+            end: i === 0 ? null : 24000 + i,
+            precision: i === 0 ? "unknown" : "month",
+            certainty: "stated",
+          },
+          placement: i === 0 ? "drifting" : "anchored",
+          transcriptId: t.id,
+          basis: "stated",
+        },
+      });
+    }
+    const one = await db.call("river", {});
+    assert.equal(one.nodes.length, 500);
+    assert.equal(one.total, 501);
+    assert.equal(one.truncated, true);
+    assert.ok(one.periods.length > 1);
+    const two = await db.call("river", { offset: 500 });
+    assert.equal(two.nodes.length, 1);
+    assert.equal(
+      new Set([...one.nodes, ...two.nodes].map((n) => n.id)).size,
+      501,
+    );
+    const n = (await db.call("getMemory", first))!;
+    await db.call("putMemory", {
+      expectedRevision: 1,
+      node: {
+        ...n,
+        revision: 2,
+        time: {
+          start: 23900,
+          end: 23900,
+          precision: "month",
+          certainty: "stated",
+        },
+        placement: "anchored",
+      },
+    });
+    const snapshot = await db.call("river", {});
+    assert.ok(snapshot.graphRevision > one.graphRevision);
+    assert.equal(
+      snapshot.nodes.find((n) => n.id === first)!.placement,
+      "anchored",
+    );
+    await assert.rejects(begin(db, "biography"), /GENERATION_LIMIT/);
+  } finally {
+    await db.close();
+  }
+});
+
+test("insufficient style is unknown; chapter title cannot add unsupported facts; no invented forgetting", async () => {
+  const { db } = await fixture();
+  try {
+    const t = await human(db, "在门口，我坐着。");
+    await extract(db, t, null);
+    const g = await begin(db, "persona");
+    const p = parsePersona(
+      JSON.stringify({
+        observations: [
+          {
+            category: "emotion",
+            observation: "缺乏足够情感表达证据",
+            examples: [{ transcriptId: t.id, quote: "我坐着" }],
+          },
+        ],
+        unknown: ["lexical", "rhythm", "ordering", "address"],
+      }),
+      g.manifest,
+      g.id,
+      g.inputHash,
+    );
+    assert.equal(p.observations.length, 0);
+    assert.ok(p.unknown.includes("emotion"));
+    await db.call("derivedCancel", g.id);
+    const b = await begin(db, "biography");
+    const refs = b.manifest.nodes.map(nodeRef);
+    assert.throws(
+      () =>
+        parsePlan(
+          JSON.stringify({
+            chapters: [{ title: "1980年大学毕业", nodeRefs: refs }],
+          }),
+          b.manifest,
+        ),
+      /title/,
+    );
+    const chapter = parsePlan(
+      JSON.stringify({
+        chapters: [{ title: "时间待确认的故事", nodeRefs: refs }],
+      }),
+      b.manifest,
+    )[0]!;
+    const section = parseSection(
+      JSON.stringify({
+        paragraphs: [{ nodeRef: refs[0], text: t.text, lead: "" }],
+      }),
+      b.manifest,
+      chapter,
+    );
+    assert.equal(section.text.includes("我还记不清"), false);
+    assert.match(section.text, /没有明确年份/);
+  } finally {
+    await db.close();
+  }
+});

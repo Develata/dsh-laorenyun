@@ -48,7 +48,7 @@ export class PresentationStorage {
   list(): GenerationSummary[] {
     return this.db
       .prepare(
-        `SELECT json_extract(json,'$.id') id,kind,state,json_extract(json,'$.createdAt') createdAt,json_extract(json,'$.progress') progress,json_extract(json,'$.error') error,json_extract(json,'$.manifest.graphRevision') revision,json_array_length(json,'$.manifest.transcripts') sampleCount FROM derived_generations ORDER BY rowid DESC LIMIT 20`,
+        `SELECT json_extract(json,'$.id') id,kind,state,json_extract(json,'$.createdAt') createdAt,json_extract(json,'$.progress') progress,json_extract(json,'$.error') error,json_extract(json,'$.manifest.graphRevision') revision,json_array_length(json,'$.manifest.transcripts') sampleCount FROM derived_generations WHERE id IN (SELECT id FROM derived_generations ORDER BY rowid DESC LIMIT 17) OR id IN (SELECT generation_id FROM derived_active) ORDER BY rowid DESC LIMIT 20`,
       )
       .all()
       .map((r) => ({

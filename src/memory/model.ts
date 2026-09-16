@@ -36,7 +36,7 @@ export class InternalModel {
             system:
               system +
               (repair
-                ? "\n上次格式或领域校验失败。重新从原始证言生成严格JSON，不要Markdown代码块；不确定就空提案。"
+                ? "\n上次格式或领域校验失败。重新按本任务指定schema生成严格JSON，不要Markdown代码块；不得为了通过校验编造事实。"
                 : ""),
             messages: [
               createUserMessage({

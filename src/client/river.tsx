@@ -27,7 +27,7 @@ const statuses = {
   disputed: "有不同说法",
   superseded: "旧说法",
 };
-const css = `.ly-river{height:100%;overflow:auto;padding:80px clamp(16px,4vw,48px) 48px;color:var(--dsw-alias-label-primary);font-size:19px;line-height:1.7;box-sizing:border-box}.ly-river *{box-sizing:border-box}.ly-river h1{font-size:clamp(28px,4vw,38px);margin:0}.ly-river h2{font-size:24px}.ly-river button,.ly-river select,.ly-river a{font:inherit}.ly-river button,.ly-river select{min-height:48px;border:1px solid #9bafa4;padding:8px 14px;border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:inherit;cursor:pointer}.ly-river button:disabled{opacity:.55;cursor:wait}.ly-river :focus-visible{outline:3px solid #47796a;outline-offset:3px}.ly-river .ly-primary{background:#406c5f;color:#fff;border-color:#406c5f}.ly-river p{max-width:64ch}.ly-river .ly-muted{color:var(--dsw-alias-label-secondary)}.ly-river .ly-grid{display:grid;grid-template-columns:minmax(240px,.9fr) minmax(260px,1.1fr);gap:32px;max-width:1150px}.ly-river svg{width:100%;max-height:660px}.ly-river .ly-list{list-style:none;margin:0;padding:0}.ly-river .ly-list button{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid #c6cfc7;border-radius:0;padding:16px 10px}.ly-river small{font-size:16px}.ly-river blockquote{border-left:3px solid #86a694;margin:16px 0;padding:4px 16px;white-space:pre-wrap;overflow-wrap:anywhere}.ly-river textarea{width:100%;min-height:120px;font:inherit;padding:12px;color:inherit;background:var(--dsw-alias-bg-layer-1);border:1px solid #8ea496;border-radius:8px}.ly-river .ly-actions{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.ly-river .ly-detail{border-top:2px solid #739481;padding-top:16px}.ly-river .ly-drifting{border-top:1px dashed #9aa994;padding-top:16px}.ly-river .ly-book{max-width:760px;border-top:1px solid #adb9ae;padding-top:24px;margin-top:36px}.ly-river a{color:inherit;text-decoration:underline;display:inline-block;padding:10px}.ly-river audio{width:100%}@media(max-width:720px){.ly-river .ly-grid{grid-template-columns:minmax(0,1fr)}.ly-river{padding-top:112px}.ly-river svg{height:480px}.ly-river .ly-detail{scroll-margin-top:110px}}@media(prefers-reduced-motion:reduce){.ly-river *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}`;
+const css = `.ly-river{height:100%;overflow:auto;padding:80px clamp(16px,4vw,48px) 48px;color:var(--dsw-alias-label-primary);font-size:19px;line-height:1.7;box-sizing:border-box}.ly-river *{box-sizing:border-box}.ly-river h1{font-size:clamp(28px,4vw,38px);margin:0}.ly-river h2{font-size:24px}.ly-river button,.ly-river select,.ly-river a{font:inherit}.ly-river button,.ly-river select{min-height:48px;border:1px solid #9bafa4;padding:8px 14px;border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:inherit;cursor:pointer}.ly-river button:disabled{opacity:.55;cursor:wait}.ly-river :focus-visible{outline:3px solid #47796a;outline-offset:3px}.ly-river .ly-primary{background:#406c5f;color:#fff;border-color:#406c5f}.ly-river p{max-width:64ch}.ly-river .ly-muted{color:var(--dsw-alias-label-secondary)}.ly-river .ly-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:32px;max-width:1150px}.ly-river svg{width:100%;max-height:660px}.ly-river .ly-list{list-style:none;margin:0;padding:0}.ly-river .ly-list button{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid #c6cfc7;border-radius:0;padding:16px 10px}.ly-river small{font-size:16px}.ly-river blockquote{border-left:3px solid #86a694;margin:16px 0;padding:4px 16px;white-space:pre-wrap;overflow-wrap:anywhere}.ly-river textarea{width:100%;min-height:120px;font:inherit;padding:12px;color:inherit;background:var(--dsw-alias-bg-layer-1);border:1px solid #8ea496;border-radius:8px}.ly-river .ly-actions{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.ly-river .ly-detail{border-top:2px solid #739481;padding-top:16px}.ly-river .ly-drifting{border-top:1px dashed #9aa994;padding-top:16px}.ly-river .ly-book{max-width:760px;border-top:1px solid #adb9ae;padding-top:24px;margin-top:36px}.ly-river a{color:inherit;text-decoration:underline;display:inline-block;padding:10px}.ly-river audio{width:100%}@media(max-width:720px){.ly-river .ly-grid{grid-template-columns:minmax(0,1fr)}.ly-river{padding-top:112px}.ly-river svg{height:480px}.ly-river .ly-detail{scroll-margin-top:110px}}@media(prefers-reduced-motion:reduce){.ly-river *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}`;
 interface Props {
   sessionId: string | null;
   onInterview: () => void;
@@ -267,7 +267,19 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
             {points.map((p) => {
               const n = data!.nodes.find((n) => n.id === p.id)!;
               return (
-                <g key={p.id}>
+                <g
+                  key={p.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${timeLabel(n)}：${n.keySentence}`}
+                  onClick={() => void select(n.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void select(n.id);
+                    }
+                  }}
+                >
                   <title>
                     {timeLabel(n)}：{n.keySentence} · {statuses[n.status]}
                   </title>
@@ -603,9 +615,12 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
             这次整理没有完成，之前的版本仍然保留。可以再次点击重试。
           </p>
         )}
-        {jobs.some((j) => j.state === "published" && j.stale) && (
-          <p>又有新的记忆了；已有版本保持原样，可按需重新整理。</p>
-        )}
+        {jobs.some(
+          (j) =>
+            j.state === "published" &&
+            j.stale &&
+            (j.id === persona?.id || j.id === book?.id || j.id === exportId),
+        ) && <p>又有新的记忆了；已有版本保持原样，可按需重新整理。</p>}
         {book && (
           <article aria-label="我的自传">
             <h2>我的自传</h2>
