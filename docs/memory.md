@@ -13,7 +13,7 @@ Owner：插件存储实现和恢复协议。产品语义见[应用04](https://gi
 | memory_revisions / memory_current | 不可变修订及当前指针；复用Phase1表 |
 | people / places / node_people / node_places | 保守实体及修订关联；同名不自动合并 |
 | source_refs | 修订→transcript ID→逐字quote、field；真实外键 |
-| memory_edges | 四种边；RELATES_TO规范方向、PRECEDES无环且时间可行 |
+| memory_edges | 四种边；RELATES_TO规范方向、PRECEDES无环且时间可行；普通模型关系为inferred，CAUSES必须有字面因果证据 |
 | conflicts | 双方确切revision、open/resolved/dismissed类型、澄清来源 |
 | memory_extraction_operations | 唯一transcript任务、输入hash、图版本、输出、状态、模型计量 |
 | graph_metadata | 单调graphRevision；语音缓存不使其增长 |

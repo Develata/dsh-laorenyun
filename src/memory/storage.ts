@@ -633,7 +633,10 @@ export class GraphStorage {
         from,
         to,
         kind,
-        JSON.stringify({ evidence, basis: "stated" }),
+        JSON.stringify({
+          evidence,
+          basis: kind === "CAUSES" ? "stated" : "inferred",
+        }),
       );
   }
   region(sessionId: string): { start: number; end: number } | null {

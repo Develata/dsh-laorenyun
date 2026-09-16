@@ -387,6 +387,18 @@ test("conservative entity identity, edge cycle/causality/symmetry, bounded pages
     );
     graph.edge(ids[0]!, ids[1]!, "PRECEDES", [], new Map());
     graph.edge(ids[1]!, ids[2]!, "PRECEDES", [], new Map());
+    assert.equal(
+      JSON.parse(
+        String(
+          raw
+            .prepare(
+              "SELECT json FROM memory_edges WHERE kind='PRECEDES' LIMIT 1",
+            )
+            .get()!.json,
+        ),
+      ).basis,
+      "inferred",
+    );
     assert.throws(
       () => graph.edge(ids[2]!, ids[0]!, "PRECEDES", [], new Map()),
       /PRECEDES_CYCLE/,
