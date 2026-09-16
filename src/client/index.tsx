@@ -158,8 +158,16 @@ export async function apply(ctx: Context): Promise<void> {
     return (
       <nav
         aria-label="老人云导航"
-        style={{ display: "flex", gap: 8, padding: 12 }}
+        className="ly-navigation"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          padding: 8,
+          maxWidth: "calc(100vw - 88px)",
+        }}
       >
+        <style>{`.ly-navigation button{min-height:48px;padding:8px 14px;font:18px/1.4 system-ui,sans-serif;color:#393b35;background:#f3efe4;border:1px solid #9bafa4;border-radius:8px}.ly-navigation button:focus-visible{outline:3px solid #47796a;outline-offset:2px}`}</style>
         {!list.current && (
           <button
             disabled={starting}

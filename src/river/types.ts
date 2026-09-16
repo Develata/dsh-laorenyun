@@ -1,6 +1,6 @@
 import type { GraphNode, Conflict } from "../memory/types.ts";
 import type { TranscriptSegment, Media } from "../domain/types.ts";
-export type RiverNode = Pick<
+export type RiverNode = { hasOpenConflict?: boolean } & Pick<
   GraphNode,
   "id" | "revision" | "keySentence" | "time" | "placement" | "status"
 >;

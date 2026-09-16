@@ -52,6 +52,7 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
     detailRef = useRef<HTMLElement>(null),
     lock = useRef(false),
     seq = useRef(0),
+    pinnedDetail = useRef(false),
     loadedGenerations = useRef<Record<string, string>>({});
   const [points, setPoints] = useState<
     Array<{
@@ -166,6 +167,7 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
   }, [placed]);
   const select = async (id: string, revision?: number) => {
     const request = ++seq.current;
+    pinnedDetail.current = revision !== undefined;
     setCorrecting(false);
     setPreview(false);
     try {
@@ -178,7 +180,12 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
     }
   };
   useEffect(() => {
-    if (detail && data && detail.graphRevision !== data.graphRevision)
+    if (
+      detail &&
+      data &&
+      !pinnedDetail.current &&
+      detail.graphRevision !== data.graphRevision
+    )
       void select(detail.node.id);
   }, [data?.graphRevision]);
   const active = jobs.find(
@@ -281,7 +288,8 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
                   }}
                 >
                   <title>
-                    {timeLabel(n)}：{n.keySentence} · {statuses[n.status]}
+                    {timeLabel(n)}：{n.keySentence} ·{" "}
+                    {n.hasOpenConflict ? "有不同说法" : statuses[n.status]}
                   </title>
                   {n.time.precision !== "month" && (
                     <path
@@ -305,7 +313,11 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
                     cx={p.x}
                     cy={p.y}
                     r={detail?.node.id === p.id ? 10 : 7}
-                    fill={n.status === "confirmed" ? "#426d5b" : "#faf7f0"}
+                    fill={
+                      n.status === "confirmed" && !n.hasOpenConflict
+                        ? "#426d5b"
+                        : "#faf7f0"
+                    }
                     stroke="#426d5b"
                     strokeWidth="2"
                   />
@@ -368,7 +380,8 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
                     onClick={() => void select(n.id)}
                   >
                     <small>
-                      {timeLabel(n)} · {statuses[n.status]}
+                      {timeLabel(n)} ·{" "}
+                      {n.hasOpenConflict ? "有不同说法" : statuses[n.status]}
                       {n.time.certainty === "inferred" ? " · 时间为推测" : ""}
                     </small>
                     <br />
@@ -403,7 +416,10 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
                   <button onClick={() => void select(n.id)}>
                     {n.keySentence}
                     <br />
-                    <small>时间待确认 · {statuses[n.status]}</small>
+                    <small>
+                      时间待确认 ·{" "}
+                      {n.hasOpenConflict ? "有不同说法" : statuses[n.status]}
+                    </small>
                   </button>
                 </li>
               ))}
@@ -458,7 +474,13 @@ export function MemoryRiver({ sessionId, onInterview, onCorrection }: Props) {
               {detail.conflicts.length > 0 && (
                 <p>这段记忆有不同说法，暂时没有选定哪一种。</p>
               )}
+              {pinnedDetail.current && (
+                <button onClick={() => void select(detail.node.id)}>
+                  查看现在的记忆
+                </button>
+              )}
               <button
+                disabled={pinnedDetail.current}
                 onClick={() => {
                   setCorrecting(true);
                   setCorrection("");

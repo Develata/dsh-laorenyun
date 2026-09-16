@@ -328,6 +328,12 @@ export class PresentationStorage {
         "SELECT CAST(json_extract(r.json,'$.time.start')/120 AS INTEGER)*120 start,count(*) count FROM memory_revisions r JOIN memory_current c USING(id,revision) WHERE COALESCE(json_extract(r.json,'$.status'),'confirmed')<>'superseded' GROUP BY start ORDER BY start LIMIT 100",
       )
       .all() as unknown as RiverSnapshot["periods"];
+    const conflictForNode = this.db.prepare(
+      "SELECT 1 FROM conflicts WHERE status='open' AND (left_id=? OR right_id=?) LIMIT 1",
+    );
+    const openConflictNodes = new Set(
+      all.filter((n) => conflictForNode.get(n.id, n.id)).map((n) => n.id),
+    );
     const ids = new Set(all.map((n) => n.id));
     const relations = (
       this.db
@@ -348,6 +354,7 @@ export class PresentationStorage {
         time: n.time,
         placement: n.placement,
         status: n.status ?? "confirmed",
+        hasOpenConflict: openConflictNodes.has(n.id),
       })),
       total,
       offset,

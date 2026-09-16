@@ -19,3 +19,9 @@ Phase 2 R2 实体麦克风、R3 真人采访恢复仍 pending。
 `pnpm check`、`pnpm format:check`、`git diff --check`。`tests/derived.test.ts`覆盖弧长、区间/同月/漂流、纠正取消/新修订、人物语料/引文/禁区、固定manifest、WHAT/HOW、family来源、开放冲突省略、HTML注入/离线链接、发布hash/恢复及共享任务。
 
 实际执行数量、浏览器尺寸及实网耗时在应用报告记录。原Phase1–3测试全部继续运行。
+
+## 容器审查修正与已执行结果
+
+`pnpm check`实际通过42项测试（原有33项 + Phase4 9项）、Host/Client typecheck及build；format/check通过。新增501条规模与open Conflict双方提示测试。
+
+真实模型/浏览器反馈后收紧：不把没有年份写成“我记不清”；样本不足类别转unknown；标题限制为中性集合/来源短语，章节日期由代码排序；2倍布局按可用宽度折行；旧自传出处保持固定revision；旧good生成即使不在最近记录也保留可查询入口。最终实网耗时与浏览器结果仍由应用报告拥有。

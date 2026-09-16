@@ -291,3 +291,5 @@ Remote版本为1；未知字段/大小/enum在边界拒绝。更改state/protoco
 `derived-start`接收客户端幂等id/kind/sessionId/可选personaId或biographyId，返回任务ID；服务端固定模型route和manifest。`derived-list`只返回≤20任务摘要；`derived-view`返回结果，不返回模型路由/提示/manifest原档案。`derived-cancel`取消pending/running，旧产物不动。`export-download`仅允许三种固定文件名，hash验证后私密下载。`source-audio`必须由node revision→transcript→media解析，无任意文件路径。
 
 Persona为观察JSON和inputHash/源ID清单，DB为权威。Biography为固定章节/Section及出处，来源支持完整原句是发布条件；自由改写不在当前renderer能力内。ExportGeneration绑定已发布biography manifest而非实时图。[实现范围与限制](phase-4.md)。
+
+RiverNode.hasOpenConflict是展示投影标志，不改MemoryNode.status。旧自传详情传固定revision，只有显式“查看现在的记忆”才转当前。派生list至多20条（最近17条与三种active合并），长期失败重试不能使最后good版本入口消失。Persona不足观察移入unknown；章节标题限制来源原词/中性词组，年代排序代码保证。

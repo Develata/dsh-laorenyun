@@ -568,3 +568,54 @@ test("insufficient style is unknown; chapter title cannot add unsupported facts;
     await db.close();
   }
 });
+
+test("river flags BOTH sides of an open Conflict without rewriting node status", async () => {
+  const { db } = await fixture();
+  try {
+    const first = await human(db, "1977年，我进入合肥一中。");
+    const left = (await extract(db, first, 1977)).nodeIds[0]!;
+    const t = await human(db, "1977年，我进入合肥六中。");
+    const input = (await db.call("memoryClaim", null))!;
+    await db.call("memoryProposal", {
+      id: input.operation.id,
+      result: {
+        proposals: [
+          {
+            keySentence: t.text,
+            basis: "stated",
+            time: {
+              start: 1977 * 12,
+              end: 1977 * 12 + 11,
+              precision: "year",
+              certainty: "stated",
+              originalText: "1977年",
+            },
+            evidence: [{ transcriptId: t.id, text: t.text, field: "claim" }],
+            people: [],
+            places: [],
+            edges: [],
+          },
+        ],
+        comparisons: [
+          {
+            proposal: 0,
+            nodeId: left,
+            revision: 1,
+            verdict: "material_conflict",
+            explanation: "同一入学事件不同学校",
+          },
+        ],
+        resolutions: [],
+      },
+    });
+    await db.call("memoryApply", {
+      id: input.operation.id,
+      expected: input.operation.graphRevision,
+    });
+    const river = await db.call("river", {});
+    assert.equal(river.nodes.filter((n) => n.hasOpenConflict).length, 2);
+    assert.equal((await db.call("getMemory", left))!.revision, 1);
+  } finally {
+    await db.close();
+  }
+});
