@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { DomainDatabase } from "../src/storage/database.ts";
 import { sourceMarker } from "../src/domain/source-reference.ts";
 import { DerivedService } from "../src/derived/service.ts";
-import { InternalModel } from "../src/memory/model.ts";
+import type { InternalModel } from "../src/memory/model.ts";
 import { FileRecordingStore } from "../src/storage/recordings.ts";
 import {
   type SourceId,
@@ -114,9 +114,15 @@ async function extract(
   if (!targetId) nodes++;
   return n;
 }
-const model = new InternalModel({
-  async *stream(request: any) {
-    const input = JSON.parse(request.messages[0].content[0].text);
+const model = {
+  async json(
+    route: { model: string },
+    _system: string,
+    input: any,
+    parse: (raw: string) => unknown,
+    signal: AbortSignal,
+  ) {
+    signal.throwIfAborted();
     let value: any;
     if (input.transcripts) {
       const t = input.transcripts.find((t: any) => t.text.includes("那时候啊"));
@@ -150,9 +156,12 @@ const model = new InternalModel({
           nodeRefs: input.nodes.slice(n, n + 20).map((x: any) => x.ref),
         });
     }
-    yield { type: "text-delta", text: JSON.stringify(value) };
+    return {
+      value: parse(JSON.stringify(value)),
+      evidence: { model: route.model, latencyMs: 0, repairs: 0 },
+    };
   },
-} as any);
+} as unknown as InternalModel;
 const derived = new DerivedService(db, model, root);
 async function generate(kind: "persona" | "biography" | "export", extra = {}) {
   const g = await db.call("derivedBegin", {
