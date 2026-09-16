@@ -4,6 +4,8 @@ Owner：实现/离线验证；最终版本、镜像、浏览器、CI与课程交
 
 ## 审查与修正
 
+- 演示浏览器发现Renderer返回顺序可偏离已验证Planner；发布正文现在按chapter.nodeRefs的确定性时序组装，测试反序模型输出仍保持相同正文。
+
 - JSON业务请求改用已支持streaming route，最多80,000 bytes/10秒，然后限制20,000字符；不在检查之前完整缓冲未知大小正文。音频仍32MiB/60秒。
 - 录音MIME优先MediaRecorder实际值，其次真实chunk类型；未知标application/octet-stream并明确拒绝上传，不伪造WebM出处。
 - 大档案GENERATION_LIMIT显示容量原因，不建议无效重试；上一个已发布版本继续可用。

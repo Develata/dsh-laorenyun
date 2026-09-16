@@ -174,14 +174,16 @@ export function parseSection(
         : n.placement === "drifting"
           ? "（这段讲述没有明确年份。）"
           : "";
-    return prefix + lead + claim;
+    return { ref, text: prefix + lead + claim };
   });
   if (seen.size !== chapter.nodeRefs.length) invalid("missing chapter node");
   return {
     id: `section-${chapter.id}`,
     chapterId: chapter.id,
     title: chapter.title,
-    text: paragraphs.join("\n\n"),
+    text: chapter.nodeRefs
+      .map((ref) => paragraphs.find((p) => p.ref === ref)!.text)
+      .join("\n\n"),
     nodeRefs: [...chapter.nodeRefs],
     sourceRefs: [...sourceRefs].sort(),
     status: "validated",

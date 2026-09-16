@@ -292,6 +292,12 @@ test("fixed biography manifest, WHAT/HOW, uncertainty, family attribution, plann
       })),
     });
     const section = parseSection(raw, m, plan[0]!);
+    const reversed = JSON.parse(raw);
+    reversed.paragraphs.reverse();
+    assert.equal(
+      parseSection(JSON.stringify(reversed), m, plan[0]!).text,
+      section.text,
+    );
     assert.match(section.text, /据家人或亲友回忆/);
     assert.match(section.text, /1978年/);
     assert.throws(
