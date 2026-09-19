@@ -23,6 +23,8 @@ export function exportDocuments(
   const b = g.manifest.biography;
   if (!b)
     throw new DomainError("BIOGRAPHY_REQUIRED", "fixed published biography");
+  const referencedSources = new Set(b.sections.flatMap((s) => s.sourceRefs));
+  const referencedNodes = new Set(b.sections.flatMap((s) => s.nodeRefs));
   const m = g.manifest,
     sources = new Map(m.transcripts.map((t, i) => [t.id, `source-${i + 1}`])),
     nodes = new Map(m.nodes.map((n, i) => [nodeRef(n), `memory-${i + 1}`]));
@@ -43,9 +45,11 @@ export function exportDocuments(
       )}<p>查看记忆：${s.nodeRefs.map((ref) => `<a href="#${nodes.get(ref)}">记忆 ${[...nodes.keys()].indexOf(ref) + 1}</a>`).join("、")}</p></section>`;
   }
   html += "<h2>记忆与来源</h2>";
-  m.nodes.forEach((n) => {
-    html += `<section id="${nodes.get(nodeRef(n))}"><h3>${escapeHtml(n.keySentence)}</h3><p>${escapeHtml(n.time.originalText || "时间尚待确认")} · ${n.time.certainty === "stated" ? "讲述者陈述" : n.time.certainty === "inferred" ? "推测，待确认" : "存在不同说法"}</p>${[...new Set((n.evidence ?? []).map((e) => e.transcriptId))].map((id) => `<a href="#${sources.get(id)}">查看来源</a> `).join("")}</section>`;
-  });
+  m.nodes
+    .filter((n) => referencedNodes.has(nodeRef(n)))
+    .forEach((n) => {
+      html += `<section id="${nodes.get(nodeRef(n))}"><h3>${escapeHtml(n.keySentence)}</h3><p>${escapeHtml(n.time.originalText || "时间尚待确认")} · ${n.time.certainty === "stated" ? "讲述者陈述" : n.time.certainty === "inferred" ? "推测，待确认" : "存在不同说法"}</p>${[...new Set((b.facts ? b.facts.filter((f) => f.nodeRef === nodeRef(n)).flatMap((f) => f.sourceRefs) : (n.evidence ?? []).map((e) => e.transcriptId)).filter((id) => referencedSources.has(id)))].map((id) => `<a href="#${sources.get(id)}">查看来源</a> `).join("")}</section>`;
+    });
   const roles = {
     self: "本人",
     child: "子女",
@@ -53,7 +57,7 @@ export function exportDocuments(
     friend: "亲友",
     other: "其他",
   };
-  for (const t of m.transcripts) {
+  for (const t of m.transcripts.filter((t) => referencedSources.has(t.id))) {
     const id = sources.get(t.id)!;
     markdown += `[^${id}]: ${roles[t.speaker.role]}：${md(t.text).replaceAll("\n", " ")}\n`;
     html += `<section id="${id}"><h3>${roles[t.speaker.role]}的讲述</h3><blockquote>${escapeHtml(t.text)}</blockquote></section>`;

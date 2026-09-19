@@ -856,3 +856,85 @@ test("rejected temporal span may overlap a supported fact without locking the un
   );
   assert.equal(next.text, p.text.replace("那时候啊，", ""));
 });
+
+test("RC3 correction support excludes superseded testimony while archive history is complete", async () => {
+  const db = await DomainDatabase.open(await mkdtemp(join(tmpdir(), "rc3-")));
+  try {
+    const seed = await seedSparse(db);
+    const g = await db.call("derivedBegin", {
+      id: randomUUID(),
+      kind: "biography",
+      sessionId: seed.sessionId,
+      route: { provider: "fixture", model: "fixture" },
+      narrativeVersion: 2,
+    });
+    const m = g.manifest,
+      fs = factManifest(m);
+    const current = fs.find((f) => f.claim.includes("1983年"))!;
+    const old = m.transcripts.find((t) => t.text.includes("1982年"))!;
+    const corrected = m.transcripts.find((t) => t.text.includes("1983年"))!;
+    assert.deepEqual(current.sourceRefs, [corrected.id]);
+    assert.deepEqual(
+      new Set(current.historyRefs),
+      new Set([old.id, corrected.id]),
+    );
+    assert.ok(current.testimony.every((t) => !t.text.includes("1982")));
+    const chapter = {
+      id: "chapter-1",
+      title: "修理铺",
+      titleMode: "thematic" as const,
+      titleFactRefs: [current.id],
+      paragraphs: [{ brief: "开店", factRefs: [current.id] }],
+    };
+    const section = publishChapter(
+      chapter,
+      [{ text: current.claim, factRefs: [current.id] }],
+      fs,
+    );
+    assert.deepEqual(section.sourceRefs, [corrected.id]);
+    const { exportDocuments } = await import("../src/derived/export.ts");
+    const docs = exportDocuments({
+      ...g,
+      kind: "export",
+      manifest: {
+        ...m,
+        biography: {
+          id: g.id,
+          chapters: [],
+          sections: [section],
+          facts: fs,
+          personaId: null,
+          omittedConflicts: [],
+          narrativeVersion: 2,
+        },
+      },
+    });
+    for (const name of ["autobiography.md", "index.html"] as const) {
+      assert.ok(docs[name].includes("1983年"));
+      assert.ok(!docs[name].includes("1982年"));
+      assert.ok(!docs[name].includes("煤油灯"));
+    }
+    const definitions = [
+      ...docs["autobiography.md"].matchAll(/^\[\^(source-\d+)\]:/gm),
+    ];
+    assert.equal(definitions.length, 1);
+    const archive = JSON.parse(docs["memories.json"]);
+    assert.ok(archive.transcriptRevisions.some((t: any) => t.id === old.id));
+    assert.ok(
+      archive.transcriptRevisions.some((t: any) => t.id === corrected.id),
+    );
+    assert.ok(
+      archive.memoryRevisions.some((n: any) =>
+        n.keySentence.includes("1982年"),
+      ),
+    );
+    assert.ok(archive.conflicts.some((c: any) => c.status === "resolved"));
+    const broken = structuredClone(m);
+    broken.revisions = broken.revisions.filter(
+      (n) => !n.keySentence.includes("1982年"),
+    );
+    assert.throws(() => factManifest(broken), /correction history unavailable/);
+  } finally {
+    await db.close();
+  }
+});
