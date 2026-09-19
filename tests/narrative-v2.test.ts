@@ -294,15 +294,20 @@ test("paragraph repair leaves successful paragraphs intact; optional-only failur
         let out: any;
         if (input.brief) {
           const ids = input.brief.factRefs;
+          if (input.repair) {
+            assert.equal(input.title, undefined);
+            assert.equal(input.style, undefined);
+          }
+          const inputFacts = input.allowedFacts ?? input.facts;
           for (const id of ids) writes[id] = (writes[id] ?? 0) + 1;
           out = {
-            text: input.facts
+            text: inputFacts
               .map((f: FactAtom) =>
                 f.attribution.required ? "家人说，" + f.claim : f.claim,
               )
               .join(""),
             factRefs: ids,
-            attributions: input.facts
+            attributions: inputFacts
               .filter((f: FactAtom) => f.attribution.required)
               .map((f: FactAtom) => ({ factRef: f.id, surface: "家人说" })),
           };

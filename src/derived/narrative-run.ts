@@ -121,13 +121,14 @@ export async function generateNarrative(
           );
           const p = await call(
             attempt ? TARGETED_REPAIR_PROMPT : NARRATIVE_WRITE_PROMPT,
-            {
-              title,
-              brief,
-              facts: material(allowed),
-              style: styleSlot(g.manifest.persona),
-              ...(repair ? { repair, allowedFacts: material(allowed) } : {}),
-            },
+            repair
+              ? { brief, repair, allowedFacts: material(allowed) }
+              : {
+                  title,
+                  brief,
+                  facts: material(allowed),
+                  style: styleSlot(g.manifest.persona),
+                },
             (raw) =>
               repair
                 ? parseParagraphRepair(raw, brief, repair)

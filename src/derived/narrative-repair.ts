@@ -90,6 +90,9 @@ export function repairContract(
     transitionSpans,
     protectedSpans,
     allowAppend: issues.includes("FACT_COVERAGE_MISSING"),
+    rejectedClaims: r.claims.filter((c) =>
+      ["unsupported", "contradicted"].includes(c.status),
+    ),
     originalParagraph: p,
     issues,
   };
