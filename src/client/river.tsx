@@ -77,6 +77,8 @@ export function MemoryRiver({
           old &&
           old.graphRevision === snapshot.graphRevision &&
           old.offset === snapshot.offset &&
+          old.total === snapshot.total &&
+          old.truncated === snapshot.truncated &&
           JSON.stringify(old.nodes.map((n) => n.id)) ===
             JSON.stringify(snapshot.nodes.map((n) => n.id))
             ? old
