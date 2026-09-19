@@ -314,3 +314,7 @@ Phase5 HTTP边界：普通JSON请求streaming读取≤80,000 bytes/10秒、解�
 标题与段落各自最多一次语义修复；所有调用共用原生成截止。已通过段落不重写；仅可省略事实组成的失败段落可退出正文并记录原因。JSON导出包含FactAtom映射和omissions，段落factRefs仍能解析到节点修订及源证言；省略元数据不插入正文。
 
 RC2定向修复返回`edits[{span,replacement}]`、受限`append`及最终attributions；span必须唯一且属于软件列出的可编辑区，编辑不可重叠，支持片段不能消失或换序。标题仍单独处理。补丁不是免审：应用补丁后重新进行相同原子/时间/归属/覆盖验证，最多一次语义修复。
+
+## RC3 自传出处投影
+
+FactAtom.sourceRefs/testimony 是当前叙事支持；historyRefs 若存在是包括继承证言的历史集合。同节点更正根据 resolved Conflict 修订边界排除旧支持，图数据本身不变。Section引用当前支持；Markdown/HTML仅输出已引用来源，memories.json保留固定完整历史。旧生成不静默改写。实测状态见[v0.2](v0.2.md)。
