@@ -260,7 +260,7 @@ test("sparse fixture A-I preserves graph revisions, corrected current fact and p
   }
 });
 
-test("paragraph repair leaves successful paragraphs intact; optional-only failure is omitted and empty chapter dropped", async () => {
+test("paragraph repair isolates failures; malformed title review falls back without discarding verified prose", async () => {
   const { generateNarrative } = await import("../src/derived/narrative-run.ts");
   const db = await DomainDatabase.open(
     await mkdtemp(join(tmpdir(), "rc2-isolation-")),
@@ -325,6 +325,10 @@ test("paragraph repair leaves successful paragraphs intact; optional-only failur
         } else if (input.originalTitle) {
           out = { title: "家里的日子" };
         } else if (input.task) {
+          if (input.task.startsWith("title:"))
+            throw new SyntaxError(
+              "synthetic malformed title review after format repair",
+            );
           out = {
             complete: true,
             claims: input.facts.map((f: FactAtom) => ({
@@ -401,6 +405,12 @@ test("paragraph repair leaves successful paragraphs intact; optional-only failur
     assert.doesNotMatch(docs["index.html"], /<script|https?:\/\/|@import/);
     assert.ok(docs["autobiography.md"].includes(result.sections[0]!.text));
     assert.equal(result.chapters.length, 1);
+    assert.ok(
+      g.diagnostics?.some((d) => d.reasonCode === "TITLE_FORMAT_FAILURE"),
+    );
+    assert.ok(
+      g.diagnostics?.some((d) => d.reasonCode === "VALIDATED_HEADING_FALLBACK"),
+    );
     assert.equal(writes[optional.id], 2);
     assert.ok(required.every((f) => writes[f.id] === 1));
     assert.ok(

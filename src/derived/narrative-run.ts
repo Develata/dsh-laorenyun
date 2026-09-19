@@ -219,48 +219,72 @@ export async function generateNarrative(
     );
     let titleOK = false;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const r = await review(title, titleFacts, `title:${chapter.titleMode}`);
-      (g.atomicReviews ??= []).push({
-        chapterId: chapter.id,
-        paragraphIndex: -1,
-        attempt,
-        report: r,
-      });
-      const issues = paragraphProblems(
-        { text: title, factRefs: [] },
-        titleFacts.filter((f) => !f.attribution.required),
-      );
-      // The title must not become a second, loosely paraphrased factual surface.
-      // Pure thematic labels remain free; an assertive heading must also occur
-      // in already validated prose. Only headings have this extractive bound.
-      const titleGrounded =
-        r.claims.every((c) => c.status === "nonfactual") ||
-        paragraphs.some((p) => p.text.includes(title));
-      if (reviewPassed(r) && !issues.length && titleGrounded) {
-        titleOK = true;
+      try {
+        const r = await review(title, titleFacts, `title:${chapter.titleMode}`);
+        (g.atomicReviews ??= []).push({
+          chapterId: chapter.id,
+          paragraphIndex: -1,
+          attempt,
+          report: r,
+        });
+        const issues = paragraphProblems(
+          { text: title, factRefs: [] },
+          titleFacts.filter((f) => !f.attribution.required),
+        );
+        // The title must not become a second, loosely paraphrased factual surface.
+        // Pure thematic labels remain free; an assertive heading must also occur
+        // in already validated prose. Only headings have this extractive bound.
+        const titleGrounded =
+          r.claims.every((c) => c.status === "nonfactual") ||
+          paragraphs.some((p) => p.text.includes(title));
+        if (reviewPassed(r) && !issues.length && titleGrounded) {
+          titleOK = true;
+          break;
+        }
+        (g.diagnostics ??= []).push({
+          chapterId: chapter.id,
+          paragraphIndex: -1,
+          attempt,
+          claimKind: "title",
+          status: "unsupported",
+          factRefs: chapter.titleFactRefs,
+          reasonCode: "UNSUPPORTED_TITLE",
+        });
+        await save("reviewing");
+        if (!attempt)
+          title = await call(
+            TITLE_REPAIR_PROMPT,
+            {
+              originalTitle: title,
+              facts: material(titleFacts),
+              validatedParagraphs: paragraphs.map((p) => p.text),
+              issues: r,
+            },
+            (raw) => text(obj(JSON.parse(raw), ["title"]).title, 60),
+          );
+      } catch (error) {
+        // A malformed title review/repair has exhausted InternalModel's format
+        // retry. It cannot invalidate accepted prose or authorize an unsafe title.
+        if (
+          !(
+            error instanceof SyntaxError ||
+            (error instanceof DomainError &&
+              error.code === "NARRATIVE_VALIDATION")
+          )
+        )
+          throw error;
+        (g.diagnostics ??= []).push({
+          chapterId: chapter.id,
+          paragraphIndex: -1,
+          attempt,
+          claimKind: "title",
+          status: "unsupported",
+          factRefs: chapter.titleFactRefs,
+          reasonCode: "TITLE_FORMAT_FAILURE",
+        });
+        await save("reviewing");
         break;
       }
-      (g.diagnostics ??= []).push({
-        chapterId: chapter.id,
-        paragraphIndex: -1,
-        attempt,
-        claimKind: "title",
-        status: "unsupported",
-        factRefs: chapter.titleFactRefs,
-        reasonCode: "UNSUPPORTED_TITLE",
-      });
-      await save("reviewing");
-      if (!attempt)
-        title = await call(
-          TITLE_REPAIR_PROMPT,
-          {
-            originalTitle: title,
-            facts: material(titleFacts),
-            validatedParagraphs: paragraphs.map((p) => p.text),
-            issues: r,
-          },
-          (raw) => text(obj(JSON.parse(raw), ["title"]).title, 60),
-        );
     }
     if (!titleOK) {
       // A failed title must not discard independently validated prose. Reuse a
