@@ -1,197 +1,372 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { DomainDatabase } from "../src/storage/database.ts";
+import { seedSparse } from "./fixtures/sparse-biography.ts";
 import {
   factManifest,
   parseNarrativePlan,
-  parseWriting,
+  parseParagraph,
   parseReview,
   reviewPassed,
+  paragraphProblems,
   publishChapter,
   styleSlot,
+  omissionAllowed,
   type FactAtom,
 } from "../src/derived/narrative.ts";
-import type { Manifest, Persona } from "../src/derived/types.ts";
-const facts: FactAtom[] = [
-  {
-    id: "F001",
-    claim: "我小时候在河边玩。",
-    nodeRef: "one@1",
-    certainty: "stated",
-    time: null,
-    sourceRefs: ["t1"],
-    testimony: [{ text: "我小时候在河边玩。", speaker: "self" }],
+const f = (id: string, claim: string): FactAtom => ({
+  id,
+  claim,
+  nodeRef: id + "@1",
+  certainty: "stated",
+  time: null,
+  sourceRefs: [id],
+  testimony: [{ speaker: "self", text: claim }],
+  sourceMode: "self",
+  narrativePolicy: "required",
+  attribution: { required: false, speakerRoles: [] },
+  temporalPolicy: {
+    explicitCalendarAllowed: false,
+    uncertaintyMustRemain: false,
   },
-  {
-    id: "F002",
-    claim: "邻居的孩子也在。",
-    nodeRef: "two@1",
-    certainty: "stated",
-    time: null,
-    sourceRefs: ["t2"],
-    testimony: [{ text: "邻居的孩子也在。", speaker: "self" }],
-  },
+  conflictPolicy: "none",
+  conflictIds: [],
+});
+const facts = [
+  f("F001", "小时候我在河边玩。"),
+  f("F002", "邻居的孩子也在那里。"),
 ];
-test("narrative supports natural titles, multiple facts per paragraph and unknown dates without metadata", () => {
+const planJSON = (ids: string[]) => ({
+  chapters: [
+    {
+      title: "河边的童年",
+      titleMode: "thematic",
+      titleFactRefs: [ids[0]],
+      paragraphs: [{ brief: "合并童年玩耍", factRefs: ids }],
+    },
+  ],
+  omissions: [],
+});
+test("natural multi-fact paragraph with no unknown-time metadata and complete atomic coverage", () => {
   const plan = parseNarrativePlan(
-    JSON.stringify({
-      chapters: [
-        {
-          title: "河边的童年",
-          paragraphs: [{ brief: "孩子一起玩", factRefs: ["F001", "F002"] }],
-        },
-      ],
-      omissions: [],
-    }),
+    JSON.stringify(planJSON(["F001", "F002"])),
     facts,
   );
-  const ps = parseWriting(
+  const p = parseParagraph(
     JSON.stringify({
-      paragraphs: [
-        {
-          text: "小时候，我常在河边玩，邻居家的孩子也在那里。",
-          factRefs: ["F001", "F002"],
-        },
-      ],
+      text: "说起小时候，我在河边玩，邻居的孩子也在那里。",
+      factRefs: ["F001", "F002"],
+      attributions: [],
     }),
-    plan[0]!,
+    plan.chapters[0]!.paragraphs[0]!,
   );
-  const s = publishChapter(plan[0]!, ps, facts);
-  assert.equal(s.paragraphs!.length, 1);
-  assert.equal(s.nodeRefs.length, 2);
-  assert.deepEqual(s.sourceRefs, ["t1", "t2"]);
-  assert.doesNotMatch(s.text, /年份|待确认|F001|one@/);
-});
-test("references alone never pass independent review; unsupported facts and partial coverage reject", () => {
   const r = parseReview(
     JSON.stringify({
       complete: true,
-      claims: [{ claim: "天气晴朗", supportedBy: [], status: "unsupported" }],
+      claims: [
+        {
+          span: "说起小时候",
+          claim: "",
+          kind: "narrative_glue",
+          status: "nonfactual",
+          supportedBy: [],
+        },
+        {
+          span: "我在河边玩",
+          claim: "童年玩耍",
+          kind: "factual",
+          status: "compatible_paraphrase",
+          supportedBy: ["F001"],
+        },
+        {
+          span: "邻居的孩子也在那里",
+          claim: "伙伴",
+          kind: "factual",
+          status: "supported",
+          supportedBy: ["F002"],
+        },
+      ],
       problems: [],
     }),
-    ["F001"],
+    p.factRefs,
+    p.text,
   );
-  assert.equal(reviewPassed(r), false);
+  assert.ok(reviewPassed(r));
+  assert.deepEqual(paragraphProblems(p, facts, r), []);
+  const s = publishChapter(plan.chapters[0]!, [p], facts);
+  assert.equal(s.nodeRefs.length, 2);
+  assert.doesNotMatch(s.text, /年份不详|待确认/);
+  r.claims.pop();
+  assert.ok(paragraphProblems(p, facts, r).includes("FACT_COVERAGE_MISSING"));
+});
+test("atomic schema rejects cross-paragraph refs, fabricated spans, factual nonfactual labels", () => {
+  const base = {
+    complete: true,
+    claims: [
+      {
+        span: "河边",
+        claim: "河边",
+        kind: "factual",
+        status: "supported",
+        supportedBy: ["F002"],
+      },
+    ],
+    problems: [],
+  };
+  assert.throws(() => parseReview(JSON.stringify(base), ["F001"], "河边"));
+  base.claims[0]!.supportedBy = ["F001"];
+  assert.throws(() => parseReview(JSON.stringify(base), ["F001"], "工厂"));
+  base.claims[0]!.status = "nonfactual";
+  assert.throws(() => parseReview(JSON.stringify(base), ["F001"], "河边"));
+});
+test("deterministic calendar/age and attribution guards defeat even a permissive model review", () => {
+  for (const text of [
+    "1976年我在河边玩。",
+    "三月我在河边玩。",
+    "我十岁时在河边玩。",
+    "年份不详，我在河边玩。",
+  ]) {
+    assert.ok(
+      paragraphProblems({ text, factRefs: ["F001"] }, [facts[0]!]).length,
+    );
+  }
+  const family = {
+    ...f("F003", "家里用煤油灯。"),
+    sourceMode: "nonself" as const,
+    narrativePolicy: "requires_attribution" as const,
+    attribution: { required: true, speakerRoles: ["child"] },
+  };
+  assert.ok(
+    paragraphProblems({ text: "我记得家里用煤油灯。", factRefs: [family.id] }, [
+      family,
+    ]).includes("MISSING_ATTRIBUTION"),
+  );
+  const p = {
+    text: "家人提起，家里用煤油灯。",
+    factRefs: [family.id],
+    attributions: [{ factRef: family.id, surface: "家人提起" }],
+  };
+  assert.deepEqual(paragraphProblems(p, [family]), []);
+  p.attributions[0]!.surface = "子女说";
+  assert.ok(paragraphProblems(p, [family]).length);
+});
+test("unsupported atomic person/motivation/weather/causality/identity claims are not publishable", () => {
+  for (const [kind, span] of [
+    ["identity", "李老师教我"],
+    ["mental_state", "我想改变命运"],
+    ["factual", "那天下雨"],
+    ["causal", "因此去了工厂"],
+    ["attribution", "我亲历家人的记忆"],
+  ]) {
+    const r = parseReview(
+      JSON.stringify({
+        complete: true,
+        claims: [
+          { kind, span, claim: span, status: "unsupported", supportedBy: [] },
+        ],
+        problems: [],
+      }),
+      ["F001"],
+      span!,
+    );
+    assert.equal(reviewPassed(r), false);
+    assert.ok(
+      paragraphProblems({ text: span!, factRefs: ["F001"] }, [facts[0]!], r)
+        .length,
+    );
+  }
+});
+test("omissions cannot drop required unknown-date facts, disguise distinct events or use arbitrary reasons", () => {
+  assert.throws(() =>
+    parseNarrativePlan(JSON.stringify(planJSON(["F001"])), facts),
+  );
   assert.equal(
-    reviewPassed(
-      parseReview('{"complete":false,"claims":[],"problems":[]}', []),
+    omissionAllowed(
+      { factRef: "F002", reason: "duplicate", duplicateOf: "F001" },
+      facts,
+      new Set(["F001"]),
     ),
     false,
   );
-  assert.throws(() =>
-    parseReview(
-      '{"complete":true,"claims":[{"claim":"工作","supportedBy":["invented"],"status":"supported"}],"problems":[]}',
-      [],
-    ),
-  );
-});
-test("planner cannot lose testimony, invent IDs, or consolidate separate events", () => {
-  assert.throws(() =>
-    parseNarrativePlan('{"chapters":[],"omissions":[]}', facts),
-  );
-  assert.throws(() =>
-    parseNarrativePlan(
-      JSON.stringify({
-        chapters: [
-          {
-            title: "童年",
-            paragraphs: [{ brief: "玩耍", factRefs: ["F001"] }],
-          },
-        ],
-        omissions: [{ factRef: "F002", duplicateOf: "F001" }],
-      }),
+  assert.equal(
+    omissionAllowed(
+      { factRef: "F001", reason: "insufficient_context" },
       facts,
+      new Set(),
+    ),
+    false,
+  );
+  const optional = {
+    ...f("F003", "父亲帮家里干活。"),
+    narrativePolicy: "optional_ambiguous" as const,
+  };
+  assert.ok(
+    omissionAllowed(
+      { factRef: optional.id, reason: "ambiguous_attribution" },
+      [optional],
+      new Set(),
     ),
   );
+  const raw = {
+    ...planJSON(["F001", "F002"]),
+    omissions: [{ factRef: optional.id, reason: "ambiguous_attribution" }],
+  };
+  assert.equal(
+    parseNarrativePlan(JSON.stringify(raw), [...facts, optional]).omissions
+      .length,
+    1,
+  );
 });
-test("WHAT manifest is independent of Persona HOW and requires verifiable source evidence", () => {
-  const m = {
-    nodes: [
-      {
-        id: "n",
-        revision: 1,
-        keySentence: "我小时候在河边玩。",
-        status: "confirmed",
-        basis: "stated",
-        placement: "drifting",
-        time: {
-          start: null,
-          end: null,
-          precision: "unknown",
-          certainty: "stated",
-          originalText: "",
-        },
-        evidence: [
-          { transcriptId: "t", text: "我小时候在河边玩。", field: "claim" },
-        ],
-      },
-    ],
-    transcripts: [
-      { id: "t", text: "我小时候在河边玩。", speaker: { role: "self" } },
-    ],
-    conflicts: [],
-    persona: null,
-  } as unknown as Manifest;
-  const before = factManifest(m);
-  const persona = {
-    observations: [{ category: "rhythm", observation: "短句", examples: [] }],
-  } as unknown as Persona;
-  m.persona = persona;
-  assert.deepEqual(factManifest(m), before);
-  assert.equal(styleSlot(persona).length, 1);
-  assert.equal(before[0]!.time, null);
-  m.transcripts.push({
-    id: "clarify",
-    text: "说的是小时候，不是工作以后。",
-    speaker: { role: "self" },
-  } as never);
-  m.conflicts.push({
-    id: "c",
-    status: "resolved",
-    left: { id: "n", revision: 1 },
-    right: { id: "old", revision: 1 },
-    explanation: "时间",
-    resolution: {
-      transcriptId: "clarify",
-      text: "说的是小时候，不是工作以后。",
-      selectedNodeId: "n",
-      at: 1,
-    },
-  });
-  assert.deepEqual(factManifest(m)[0]!.clarifications, [
-    { transcriptId: "clarify", text: "说的是小时候，不是工作以后。" },
-  ]);
-  assert.ok(factManifest(m)[0]!.sourceRefs.includes("clarify"));
-  m.transcripts[0]!.text = "另一句话";
-  assert.throws(() => factManifest(m));
+test("sparse fixture A-I preserves graph revisions, corrected current fact and policy independent of Persona", async () => {
+  const db = await DomainDatabase.open(await mkdtemp(join(tmpdir(), "rc2-")));
+  try {
+    const seed = await seedSparse(db);
+    const g = await db.call("derivedBegin", {
+      id: randomUUID(),
+      kind: "biography",
+      sessionId: seed.sessionId,
+      route: { provider: "fixture", model: "fixture" },
+      personaId: seed.personaId,
+      narrativeVersion: 2,
+    });
+    const m = g.manifest;
+    const fs = factManifest(m);
+    assert.equal(fs.filter((f) => f.conflictPolicy === "open").length, 2);
+    assert.ok(fs.some((f) => f.narrativePolicy === "requires_attribution"));
+    assert.ok(fs.some((f) => f.narrativePolicy === "optional_ambiguous"));
+    assert.ok(fs.some((f) => f.certainty === "inferred"));
+    assert.ok(
+      fs.some((f) => f.time === null && f.narrativePolicy === "required"),
+    );
+    assert.ok(
+      fs.some(
+        (f) => f.claim.includes("1983年") && f.conflictPolicy === "resolved",
+      ),
+    );
+    assert.ok(!fs.some((f) => f.claim.includes("1982年")));
+    assert.ok(m.revisions.some((n) => n.keySentence.includes("1982年")));
+    assert.ok(styleSlot(m.persona).length);
+    m.persona = null;
+    assert.deepEqual(factManifest(m), fs);
+    const copy = structuredClone(m);
+    copy.transcripts[0]!.text = "证据被替换";
+    assert.throws(() => factManifest(copy));
+  } finally {
+    await db.close();
+  }
 });
 
-test("non-self testimony needs natural attribution even when model review says supported", async () => {
-  const { attributionProblems } = await import("../src/derived/narrative.ts");
-  const facts = [
-    {
-      id: "F001",
-      testimony: [{ speaker: "child", text: "1962年父亲帮家里干活。" }],
-    },
-  ] as import("../src/derived/narrative.ts").FactAtom[];
-  assert.equal(
-    attributionProblems(
-      [{ text: "1962年，父亲帮家里干活。", factRefs: ["F001"] }],
-      facts,
-    ).length,
-    1,
+test("paragraph repair leaves successful paragraphs intact; optional-only failure is omitted and empty chapter dropped", async () => {
+  const { generateNarrative } = await import("../src/derived/narrative-run.ts");
+  const db = await DomainDatabase.open(
+    await mkdtemp(join(tmpdir(), "rc2-isolation-")),
   );
-  assert.deepEqual(
-    attributionProblems(
-      [{ text: "家人后来提起，1962年我曾帮家里干活。", factRefs: ["F001"] }],
-      facts,
-    ),
-    [],
-  );
-  assert.equal(
-    attributionProblems(
-      [{ text: "我记得家里人不少。", factRefs: ["F001"] }],
-      facts,
-    ).length,
-    1,
-  );
+  try {
+    const seed = await seedSparse(db);
+    const g = await db.call("derivedBegin", {
+      id: randomUUID(),
+      kind: "biography",
+      sessionId: seed.sessionId,
+      route: { provider: "fixture", model: "fixture" },
+      narrativeVersion: 2,
+    });
+    const fs = factManifest(g.manifest);
+    const required = fs.filter(
+      (f) =>
+        f.narrativePolicy !== "excluded" &&
+        f.narrativePolicy !== "optional_ambiguous",
+    );
+    const optional = fs.find(
+      (f) => f.narrativePolicy === "optional_ambiguous",
+    )!;
+    const writes: Record<string, number> = {};
+    const model = {
+      async json(
+        _r: unknown,
+        _p: string,
+        input: any,
+        parse: (r: string) => unknown,
+      ) {
+        let out: any;
+        if (input.brief) {
+          const ids = input.brief.factRefs;
+          for (const id of ids) writes[id] = (writes[id] ?? 0) + 1;
+          out = {
+            text: input.facts
+              .map((f: FactAtom) =>
+                f.attribution.required ? "家人说，" + f.claim : f.claim,
+              )
+              .join(""),
+            factRefs: ids,
+            attributions: input.facts
+              .filter((f: FactAtom) => f.attribution.required)
+              .map((f: FactAtom) => ({ factRef: f.id, surface: "家人说" })),
+          };
+        } else if (input.task) {
+          out = {
+            complete: true,
+            claims: input.facts.map((f: FactAtom) => ({
+              span: input.text,
+              claim: f.claim,
+              kind: "factual",
+              status: f.id === optional.id ? "unsupported" : "supported",
+              supportedBy: f.id === optional.id ? [] : [f.id],
+            })),
+            problems: [],
+          };
+        } else {
+          out = {
+            chapters: [
+              {
+                title: "家里的日子",
+                titleMode: "thematic",
+                titleFactRefs: [required[0]!.id],
+                paragraphs: [
+                  { brief: "合并", factRefs: required.map((f) => f.id) },
+                ],
+              },
+              {
+                title: "家人讲述",
+                titleMode: "thematic",
+                titleFactRefs: [optional.id],
+                paragraphs: [{ brief: "身份未明", factRefs: [optional.id] }],
+              },
+            ],
+            omissions: fs
+              .filter((f) => f.narrativePolicy === "excluded")
+              .map((f) => ({ factRef: f.id, reason: "open_conflict" })),
+          };
+        }
+        return {
+          value: parse(JSON.stringify(out)),
+          evidence: { model: "fixture", latencyMs: 1, repairs: 0 },
+        };
+      },
+    } as unknown as import("../src/memory/model.ts").InternalModel;
+    const result = await generateNarrative(
+      g,
+      model,
+      AbortSignal.timeout(10000),
+      async () => {},
+    );
+    assert.equal(result.chapters.length, 1);
+    assert.equal(writes[optional.id], 2);
+    assert.ok(required.every((f) => writes[f.id] === 1));
+    assert.ok(
+      result.omissions!.some(
+        (o) => o.factRef === optional.id && o.reason === "insufficient_context",
+      ),
+    );
+    assert.ok(
+      !g.atomicReviews!.some(
+        (r) => r.chapterId === "chapter-2" && r.paragraphIndex === -1,
+      ),
+    );
+  } finally {
+    await db.close();
+  }
 });

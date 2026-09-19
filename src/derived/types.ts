@@ -73,6 +73,7 @@ export interface Biography {
   personaId: string | null;
   narrativeVersion?: 2;
   facts?: import("./narrative.ts").FactAtom[];
+  omissions?: import("./narrative.ts").Omission[];
 }
 export interface ExportResult {
   files: Array<{
@@ -100,6 +101,15 @@ export interface Generation {
     attempt: number;
     report: import("./narrative.ts").ClaimReview;
   }[];
+  narrativePlan?: import("./narrative.ts").NarrativePlan;
+  narrativeOmissions?: import("./narrative.ts").Omission[];
+  atomicReviews?: {
+    chapterId: string;
+    paragraphIndex: number;
+    attempt: number;
+    report: import("./narrative.ts").ClaimReview;
+  }[];
+  diagnostics?: import("./narrative.ts").Diagnostic[];
   evidence: ModelEvidence[];
   error?: string;
   validationReason?: string;

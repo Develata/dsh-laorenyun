@@ -701,37 +701,38 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
         parse: (s: string) => unknown,
       ) => {
         let raw;
-        if (input.paragraphs) {
-          reviews++;
-          const supported = !rejectAll && reviews % 2 === 0;
+        if (input.task) {
+          const title = input.task.startsWith("title:");
+          if (!title) reviews++;
+          const supported = title || (!rejectAll && reviews % 2 === 0);
           raw = {
             complete: true,
             claims: [
               {
-                claim: "合成审校",
+                span: input.text,
+                claim: "合成原子审校",
+                kind: "factual",
                 supportedBy: supported ? ["F001"] : [],
                 status: supported ? "supported" : "unsupported",
               },
             ],
-            problems: supported ? [] : ["存在无依据细节"],
+            problems: [],
           };
-        } else if (input.chapter) {
+        } else if (input.brief) {
           raw = {
-            title: "去合肥读书",
-            paragraphs: [
-              {
-                text: input.repair
-                  ? "1978年，我来到合肥读书。"
-                  : "1978年，我在合肥读书，住在学校宿舍。",
-                factRefs: ["F001"],
-              },
-            ],
+            text: input.repair
+              ? "1978年，我来到合肥读书。"
+              : "1978年，我在合肥读书，住在学校宿舍。",
+            factRefs: ["F001"],
+            attributions: [],
           };
         } else
           raw = {
             chapters: [
               {
                 title: "去合肥读书",
+                titleMode: "factual",
+                titleFactRefs: ["F001"],
                 paragraphs: [{ brief: "求学", factRefs: ["F001"] }],
               },
             ],

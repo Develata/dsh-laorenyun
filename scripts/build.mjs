@@ -5,6 +5,7 @@ await build({
   entryPoints: {
     index: "src/index.ts",
     demo: "scripts/demo.ts",
+    "rc2-seed": "scripts/rc2-seed.ts",
     interviewer: "src/interviewer.ts",
     "storage/worker": "src/storage/worker.ts",
   },

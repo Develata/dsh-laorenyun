@@ -1,16 +1,4 @@
-import {
-  factManifest,
-  attributionProblems,
-  parseNarrativePlan,
-  parseChapterWriting,
-  parseReview,
-  reviewPassed,
-  publishChapter,
-  styleSlot,
-  NARRATIVE_PLAN_PROMPT,
-  NARRATIVE_WRITE_PROMPT,
-  NARRATIVE_REVIEW_PROMPT,
-} from "./narrative.ts";
+import { generateNarrative } from "./narrative-run.ts";
 import type { DomainDatabase } from "../storage/database.ts";
 import type { InternalModel } from "../memory/model.ts";
 import { DomainError } from "../domain/types.ts";
@@ -130,99 +118,7 @@ export class DerivedService {
       g.evidence.push(result.evidence);
       g.result = result.value;
     } else if (g.kind === "biography" && g.promptVersion === "narrative-v2") {
-      const facts = factManifest(m);
-      await save("planning");
-      const plan = await this.model.json(
-        g.route,
-        NARRATIVE_PLAN_PROMPT,
-        { facts },
-        (raw) => parseNarrativePlan(raw, facts),
-        signal,
-      );
-      g.evidence.push(plan.evidence);
-      for (const chapter of plan.value) {
-        await save(`chapter:${g.candidates.length + 1}/${plan.value.length}`);
-        const ids = new Set(chapter.paragraphs.flatMap((p) => p.factRefs));
-        const allowed = facts.filter((f) => ids.has(f.id));
-        let previous: unknown = null;
-        let accepted = false;
-        // One semantic repair, independent of each bounded JSON format repair.
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const writing = await this.model.json(
-            g.route,
-            NARRATIVE_WRITE_PROMPT,
-            {
-              chapter,
-              facts: allowed,
-              style: styleSlot(m.persona),
-              repair: previous,
-            },
-            (raw) => parseChapterWriting(raw, chapter),
-            signal,
-          );
-          g.evidence.push(writing.evidence);
-          await save("reviewing");
-          const review = await this.model.json(
-            g.route,
-            NARRATIVE_REVIEW_PROMPT,
-            {
-              title: writing.value.title,
-              paragraphs: writing.value.paragraphs,
-              facts: allowed,
-            },
-            (raw) =>
-              parseReview(
-                raw,
-                allowed.map((f) => f.id),
-              ),
-            signal,
-          );
-          g.evidence.push(review.evidence);
-          review.value.problems.push(
-            ...attributionProblems(writing.value.paragraphs, allowed),
-          );
-          const reviews = [review.value];
-          (g.reviews ??= []).push({
-            chapterId: chapter.id,
-            attempt,
-            report: review.value,
-          });
-          await save("reviewing");
-          if (reviews.every(reviewPassed)) {
-            g.candidates.push(
-              publishChapter(
-                { ...chapter, title: writing.value.title },
-                writing.value.paragraphs,
-                facts,
-              ),
-            );
-            accepted = true;
-            break;
-          }
-          previous = { writing: writing.value, reviews };
-        }
-        if (!accepted)
-          throw new DomainError(
-            "NARRATIVE_UNSUPPORTED",
-            "factual review did not pass",
-          );
-        await save("validating");
-      }
-      g.result = {
-        id: g.id,
-        narrativeVersion: 2,
-        facts,
-        chapters: plan.value.map((c) => ({
-          id: c.id,
-          title: g.candidates.find((s) => s.chapterId === c.id)!.title,
-          nodeRefs: g.candidates.find((s) => s.chapterId === c.id)!.nodeRefs,
-        })),
-        sections: g.candidates,
-        personaId: m.persona?.id ?? null,
-        omittedConflicts: m.conflicts
-          .filter((c) => c.status === "open")
-          .map((c) => c.id),
-      } satisfies Biography;
+      g.result = await generateNarrative(g, this.model, signal, save);
     } else if (g.kind === "biography") {
       await save("planning");
       const nodes = eligible(m);
