@@ -1,3 +1,7 @@
+import type {
+  PropsRuntime,
+  PropsRenderSlots,
+} from "@deepseek-ai/dsh-client-ui-slots";
 import { memoryPreview } from "./memory-preview.ts";
 import { installModelChoice } from "./model-choice.tsx";
 import { installSpeechSettings } from "./speech-settings.tsx";
@@ -236,6 +240,39 @@ export async function installShell(
       </section>
     );
   }
+  // Pinned DSH's default rightbar root gates to Conversation. Reuse its public
+  // session seat/store/tab registry, extending only the root presentation gate.
+  ctx.slots.inject("rightbar", () =>
+    ctx.slots.register(
+      {
+        name: "rightbar",
+        priority: -10,
+        children: { "rightbar.session": { kind: "single", scope: "session" } },
+      },
+      ({
+        usePanelInfo,
+        SessionProvider,
+        renderSlot,
+        width,
+        viewportWidth,
+        canShow,
+      }: PropsRuntime<"rightbar"> & PropsRenderSlots<"rightbar.session">) => {
+        const panel = usePanelInfo(
+          (i: { activePanelId: string | null }) => i.activePanelId,
+        );
+        if (
+          panel !== null &&
+          (panel !== "laorenyun-river" || viewportWidth < 900)
+        )
+          return null;
+        return (
+          <SessionProvider>
+            {renderSlot("rightbar.session", { width, viewportWidth, canShow })}
+          </SessionProvider>
+        );
+      },
+    ),
+  );
   ctx.effect(() =>
     memoryPreview.subscribe(() => {
       const p = memoryPreview.getSnapshot();

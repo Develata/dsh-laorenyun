@@ -5,7 +5,7 @@ export function journeyPath(width: number, months: number) {
     height = Math.max(760, Math.min(14400, months * 3 + 160));
   const steps = Math.max(2, Math.ceil(height / 500));
   const center = w < 520 ? 36 : w * 0.5,
-    swing = w < 520 ? 12 : Math.min(125, w * 0.16);
+    swing = w < 520 ? 12 : Math.min(70, w * 0.12);
   let d = `M ${center} 70`;
   for (let i = 0; i < steps; i++) {
     const a = 70 + ((height - 140) * i) / steps,
