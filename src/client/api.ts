@@ -1,3 +1,4 @@
+import { archiveHeaders } from "./archive-context.ts";
 /** Calls use DSH's same-origin authenticated Fetch route; no credentials in client bundles. */
 export async function api<T>(
   method: string,
@@ -8,7 +9,10 @@ export async function api<T>(
   const response = await fetch(`/api/laorenyun/${method}`, {
     method: "POST",
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...archiveHeaders((body as { sessionId?: string }).sessionId),
+    },
     body: JSON.stringify(body),
     signal: signal
       ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])

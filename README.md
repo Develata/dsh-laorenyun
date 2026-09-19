@@ -1,5 +1,7 @@
 # dsh-laorenyun
 
+> v0.2.0-rc.1 体验重构工作线：人物档案、独立长河/自传、原生设置与 Fact Manifest 叙事。验收状态见 [v0.2](docs/v0.2.md)；v0.1.0 tag 保持不变。
+
 老人云的 DeepSeek Harness 业务插件仓库。拥有语音、口述史采访编排、SQLite 时间记忆图、出处/冲突、记忆河流、人物表达和自传导出。
 
 **v0.1.0 课程源码发行：功能和历史证据见 [Phase 4](docs/phase-4.md)，发布加固见 [Phase 5](docs/phase-5.md)。Phase 2 真人硬件门禁仍 pending，见 [Phase 2](docs/phase-2.md)。** 完整应用与 Docker 发行由 [laorenyun](https://github.com/Develata/laorenyun) 拥有。基础包开发命令见下方，最终用户从应用仓库启动。

@@ -295,3 +295,13 @@ Persona为观察JSON和inputHash/源ID清单，DB为权威。Biography为固定�
 RiverNode.hasOpenConflict是展示投影标志，不改MemoryNode.status。旧自传详情传固定revision，只有显式“查看现在的记忆”才转当前。派生list至多20条（最近17条与三种active合并），长期失败重试不能使最后good版本入口消失。Persona不足观察移入unknown；章节标题限制来源原词/中性词组，年代排序代码保证。
 
 Phase5 HTTP边界：普通JSON请求streaming读取≤80,000 bytes/10秒、解码≤20,000字符；音频边界不变。单次派生超限以GENERATION_LIMIT明确失败，客户端显示容量限制，旧版本不变。
+
+## v0.2 生效契约（替代上述 Phase 4 逐句复制限制）
+
+`Archives` 以真实 DSH Workspace ID 定义人物档案；原生 membership/父支线 header 决定 Session 归属。HTTP 的档案 header 只选读范围，任何带 sessionId 的写入必须再次核对原生成员。默认 singleton 原地映射，其他档案 DB/media/派生文件各自隔离；一个 SQLite worker 处理所有档案，最多32档案。不存在浏览器提供文件路径的接口。
+
+文字与语音在 acceptHuman 汇合：文字 mediaId=null/rawAsr为空，均以 Transcript ID 创建 extract 操作。新 Session 只换采访上下文，不换档案。
+
+`narrative-v2` 固定 manifest → FactAtoms → 章节/段落 briefs → 自由 Writer → 独立逐项事实审校。每段 factRefs 非空且在计划范围，Verifier 必须覆盖所有段落/章名；不支持事实拒绝并最多一次语义修复。不能用 Persona 补充事实，未知时间不自动成为 prose。旧 phase4-v1 结果和导出保持可读，历史兼容验证器不用于新的生产生成。
+
+模型内部任务跨档案共享最多2并发、32等待位置；入队时间也计入60秒调用期限；无工具、一次格式修复，总生成截止不重置。失败记录固定校验原因，不存入日志原始模型文本。

@@ -684,3 +684,93 @@ test("malicious testimony remains data in internal persona task with no tools", 
     await db.close();
   }
 });
+
+test("narrative-v2 repairs unsupported prose once and preserves last good book on persistent rejection", async () => {
+  const { db, root } = await fixture();
+  let service: DerivedService | undefined;
+  let rejectAll = false,
+    reviews = 0;
+  try {
+    const t = await human(db, "1978年，我在合肥读书。");
+    await extract(db, t, 1978);
+    const model = {
+      json: async (
+        _route: unknown,
+        _prompt: string,
+        input: Record<string, any>,
+        parse: (s: string) => unknown,
+      ) => {
+        let raw;
+        if (input.paragraphs) {
+          reviews++;
+          const supported = !rejectAll && reviews % 2 === 0;
+          raw = {
+            complete: true,
+            claims: [
+              {
+                claim: "合成审校",
+                supportedBy: supported ? ["F001"] : [],
+                status: supported ? "supported" : "unsupported",
+              },
+            ],
+            problems: supported ? [] : ["存在无依据细节"],
+          };
+        } else if (input.chapter) {
+          raw = {
+            title: "去合肥读书",
+            paragraphs: [
+              {
+                text: input.repair
+                  ? "1978年，我来到合肥读书。"
+                  : "1978年，我在合肥读书，住在学校宿舍。",
+                factRefs: ["F001"],
+              },
+            ],
+          };
+        } else
+          raw = {
+            chapters: [
+              {
+                title: "去合肥读书",
+                paragraphs: [{ brief: "求学", factRefs: ["F001"] }],
+              },
+            ],
+            omissions: [],
+          };
+        return {
+          value: parse(JSON.stringify(raw)),
+          evidence: { model: "fixture", latencyMs: 1, repairs: 0 },
+        };
+      },
+    } as unknown as InternalModel;
+    service = new DerivedService(db, model, root);
+    await service.start();
+    async function generate() {
+      const g = await begin(db, "biography", { narrativeVersion: 2 });
+      service!.tick();
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline) {
+        const result = await db.call("derivedGet", g.id);
+        if (["published", "failed"].includes(result.state)) return result;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      throw Error("test generation deadline");
+    }
+    const good = await generate();
+    assert.equal(good.state, "published");
+    assert.equal(reviews, 2);
+    assert.equal(
+      (good.result as Biography).sections[0]!.text,
+      "1978年，我来到合肥读书。",
+    );
+    rejectAll = true;
+    const bad = await generate();
+    assert.equal(bad.state, "failed");
+    assert.equal(bad.error, "NARRATIVE_UNSUPPORTED");
+    assert.equal(reviews, 4);
+    assert.equal((await db.call("derivedActive", "biography"))!.id, good.id);
+  } finally {
+    await service?.close();
+    await db.close();
+  }
+});

@@ -1,3 +1,5 @@
+import { installShell } from "./shell.tsx";
+import { archiveHeaders, archiveSelection } from "./archive-context.ts";
 import { MemoryRiver } from "./river.tsx";
 import { Capture } from "./recorder.ts";
 import { Playback, type PlaybackState } from "./playback.ts";
@@ -36,6 +38,11 @@ export const inject = [
   "layout",
   "conversation",
   "locale",
+  "sidebarRight",
+  "sidebarRightTabs",
+  "settingsScope",
+  "remote",
+  "remote.session",
 ];
 export async function apply(ctx: Context): Promise<void> {
   const { developer } = await api<{ developer: boolean }>("state", {});
@@ -143,69 +150,28 @@ export async function apply(ctx: Context): Promise<void> {
       },
     }),
   );
+  let archiveId = "";
+  const shell = await installShell(ctx, developer, (id) => {
+    archiveId = id;
+  });
   const openRiver = () =>
     ctx.layout.selectPanel("laorenyun-river" as MainPanelId);
   const openInterview = () =>
     ctx.layout.selectPanel("conversation" as MainPanelId);
   let awaitingFirstPlayback: string | null = null;
-  function Navigation() {
-    const list = useSyncExternalStore(
-      (fn) => ctx.sessions.list.subscribe(fn),
-      () => ctx.sessions.list.getSnapshot(),
+  function River({ mode = "river" }: { mode?: "river" | "biography" }) {
+    const activeArchive = useSyncExternalStore(
+      archiveSelection.subscribe,
+      archiveSelection.getSnapshot,
     );
-    const [starting, setStarting] = useState(false);
-    const [notice, setNotice] = useState("");
-    return (
-      <nav
-        aria-label="老人云导航"
-        className="ly-navigation"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          padding: 8,
-          maxWidth: "calc(100vw - 88px)",
-        }}
-      >
-        <style>{`.ly-navigation button{min-height:48px;padding:8px 14px;font:18px/1.4 system-ui,sans-serif;color:#393b35;background:#f3efe4;border:1px solid #9bafa4;border-radius:8px}.ly-navigation button:focus-visible{outline:3px solid #47796a;outline-offset:2px}`}</style>
-        {!list.current && (
-          <button
-            disabled={starting}
-            onClick={() => {
-              if (starting) return;
-              setStarting(true);
-              void (async () => {
-                try {
-                  const existing = list.ids[0];
-                  const id = existing ?? (await ctx.sessions.create());
-                  if (!existing) awaitingFirstPlayback = id;
-                  ctx.sessions.open(id);
-                  openInterview();
-                  if (!existing) await api("begin", { sessionId: id });
-                } catch {
-                  setNotice("暂时无法打开采访，请重试");
-                } finally {
-                  setStarting(false);
-                }
-              })();
-            }}
-          >
-            {list.ids.length ? "继续讲我的故事" : "开始讲我的故事"}
-          </button>
-        )}
-        {notice && <span role="alert">{notice}</span>}
-        <button onClick={openInterview}>讲故事</button>
-        <button onClick={openRiver}>人生长河</button>
-      </nav>
-    );
-  }
-  function River() {
     const list = useSyncExternalStore(
       (fn) => ctx.sessions.list.subscribe(fn),
       () => ctx.sessions.list.getSnapshot(),
     );
     return (
       <MemoryRiver
+        key={activeArchive}
+        mode={mode}
         sessionId={list.current ?? null}
         onInterview={openInterview}
         onCorrection={async () => {
@@ -226,6 +192,7 @@ export async function apply(ctx: Context): Promise<void> {
     const [pending, setPending] = useState<PendingRecording | null>(null);
     const [stage, setStage] = useState("ready");
     const [processing, setProcessing] = useState(false);
+    const [extracting, setExtracting] = useState(false);
     const [playState, setPlayState] = useState<PlaybackState>("idle");
     const [seconds, setSeconds] = useState(0);
     const [warning, setWarning] = useState(false);
@@ -276,7 +243,7 @@ export async function apply(ctx: Context): Promise<void> {
       try {
         const response = await fetch("/api/laorenyun/tts", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...archiveHeaders() },
           credentials: "same-origin",
           body: JSON.stringify({ sessionId, messageId: r.messageId }),
           signal: AbortSignal.any([
@@ -328,6 +295,7 @@ export async function apply(ctx: Context): Promise<void> {
             interview: InterviewState | null;
             reply: AssistantReply | null;
             processing: boolean;
+            extracting: boolean;
             receipts: { state: string; text: string }[];
           }>("state", { sessionId }, controller.current.signal);
           if (!mounted.current) return;
@@ -359,6 +327,7 @@ export async function apply(ctx: Context): Promise<void> {
           setInitialized(!!v.interview || !!v.reply);
           setReply(v.reply);
           setProcessing(v.processing);
+          setExtracting(v.extracting);
           setUncertain(
             !v.processing
               ? (v.receipts.find((r) => r.state === "domain-accepted")?.text ??
@@ -506,6 +475,7 @@ export async function apply(ctx: Context): Promise<void> {
           credentials: "same-origin",
           headers: {
             "Content-Type": v.blob.type,
+            ...archiveHeaders(),
             "x-duration-ms": String(v.durationMs),
             ...(v.incomplete ? { "x-capture-incomplete": v.incomplete } : {}),
           },
@@ -566,6 +536,7 @@ export async function apply(ctx: Context): Promise<void> {
     return (
       <section
         aria-label="采访控制"
+        className="ly-interview-controls"
         style={{
           display: "flex",
           flexWrap: "wrap",
@@ -577,6 +548,7 @@ export async function apply(ctx: Context): Promise<void> {
           width: "100%",
         }}
       >
+        <style>{`.ly-interview-controls button,.ly-interview-controls select{font:inherit;min-height:44px;border:1px solid #9aab9e;border-radius:6px;color:inherit;background:#f4f0e5;padding:8px 12px}.ly-interview-controls button:focus-visible,.ly-interview-controls select:focus-visible{outline:3px solid #47796a;outline-offset:2px}.ly-interview-controls button:disabled{opacity:.5}.ly-interview-controls small{font-size:14px;line-height:1.7}`}</style>
         {!initialized && loaded && (
           <button
             style={{
@@ -661,6 +633,7 @@ export async function apply(ctx: Context): Promise<void> {
           </span>
         )}
         {processing && <span role="status">正在听您讲的故事，请稍等…</span>}
+        {extracting && <span role="status">正在整理这段记忆…</span>}
         {playState === "generating" && <span role="status">正在准备朗读…</span>}
         {pending && stage === "ready" && (
           <button
@@ -813,24 +786,9 @@ export async function apply(ctx: Context): Promise<void> {
   ctx.slots.inject("main", () =>
     ctx.slots.register({ name: "main", key: "laorenyun-river" }, River),
   );
-  ctx.slots.inject("shell.overlay", () =>
-    ctx.slots.register(
-      { name: "shell.overlay", id: "laorenyun-navigation" },
-      () => (
-        <div
-          style={{
-            position: "absolute",
-            right: 16,
-            top: 8,
-            pointerEvents: "auto",
-            background: "#f3efe4",
-            borderRadius: 12,
-            zIndex: 5,
-          }}
-        >
-          <Navigation />
-        </div>
-      ),
-    ),
+  ctx.slots.inject("main", () =>
+    ctx.slots.register({ name: "main", key: "laorenyun-biography" }, () => (
+      <River mode="biography" />
+    )),
   );
 }

@@ -1,3 +1,9 @@
+import { InternalModel } from "./memory/model.ts";
+import { speechSettings } from "./speech/settings.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { Archives } from "./archive/registry.ts";
+import { DomainDatabase } from "./storage/database.ts";
+import type { Intelligence } from "./memory/host.ts";
 import { DerivedService } from "./derived/service.ts";
 import { readExport } from "./derived/export.ts";
 import type { Kind } from "./derived/types.ts";
@@ -48,38 +54,129 @@ export const inject = [
   "webServer",
   "sessionController",
   "subagents",
+  "workspaceRegistry",
+  "settings",
+  "sessionPersistence",
 ];
 export async function apply(ctx: Context, config: Config): Promise<void> {
   if (!isAbsolute(config.dataDir))
     throw new DomainError("CONFIG_ERROR", "dataDir must be absolute");
-  const app = await Foundation.open(config.dataDir);
-  const speech = new SpeechService(
-    app,
-    config.dataDir,
-    () =>
-      config.probes && process.env.LAORENYUN_SPEECH_FIXTURE === "true"
-        ? fixtureAsr
-        : new TencentFlashAsrProvider({
-            appId: process.env.TENCENTCLOUD_APP_ID ?? "",
-            secretId: process.env.TENCENTCLOUD_SECRET_ID ?? "",
-            secretKey: process.env.TENCENTCLOUD_SECRET_KEY ?? "",
-            engine: process.env.TENCENT_ASR_ENGINE || "16k_zh",
-            timeoutMs: Number(process.env.TENCENT_ASR_TIMEOUT_MS || 90000),
-          }),
-    () =>
-      config.probes && process.env.LAORENYUN_SPEECH_FIXTURE === "true"
-        ? fixtureTts
-        : new TencentTtsProvider({
-            secretId: process.env.TENCENTCLOUD_SECRET_ID ?? "",
-            secretKey: process.env.TENCENTCLOUD_SECRET_KEY ?? "",
-            voice: Number(process.env.TENCENT_TTS_VOICE || 101001),
-            speed: Number(process.env.TENCENT_TTS_SPEED || -0.5),
-            volume: Number(process.env.TENCENT_TTS_VOLUME || 0),
-            timeoutMs: Number(process.env.TENCENT_TTS_TIMEOUT_MS || 60000),
-          }),
-  );
-  await speech.initialize();
+  const speechConfig = speechSettings(ctx);
+  const archives = await Archives.open(ctx, config.dataDir);
+  const shared = await DomainDatabase.open(config.dataDir);
+  const internalModel = new InternalModel(ctx.llm);
+  type Runtime = {
+    id: string;
+    root: string;
+    app: Foundation;
+    speech: SpeechService;
+    derived: DerivedService;
+    intelligence: Intelligence;
+    close: () => Promise<void>;
+  };
+  const scope = new AsyncLocalStorage<Runtime>();
+  const runtimes = new Map<string, Promise<Runtime>>();
+  function current() {
+    const r = scope.getStore();
+    if (!r)
+      throw new DomainError(
+        "ARCHIVE_REQUIRED",
+        "missing explicit operation scope",
+      );
+    return r;
+  }
+  function proxy<K extends "app" | "speech" | "derived">(key: K): Runtime[K] {
+    return new Proxy({} as Runtime[K], {
+      get(_target, p) {
+        const v = current()[key];
+        const field = Reflect.get(v, p);
+        return typeof field === "function" ? field.bind(v) : field;
+      },
+    });
+  }
+  const app = proxy("app"),
+    speech = proxy("speech"),
+    derived = proxy("derived");
+  const runtime = (id: string): Promise<Runtime> => {
+    archives.get(id);
+    let pending = runtimes.get(id);
+    if (!pending) {
+      pending = (async () => {
+        const root = archives.dataRoot(id);
+        const app = await Foundation.open(root, shared);
+        const speech = new SpeechService(
+          app,
+          root,
+          () =>
+            config.probes && process.env.LAORENYUN_SPEECH_FIXTURE === "true"
+              ? fixtureAsr
+              : new TencentFlashAsrProvider({
+                  appId: speechConfig().appId,
+                  secretId: speechConfig().secretId,
+                  secretKey: speechConfig().secretKey,
+                  engine: speechConfig().engine,
+                  timeoutMs: Number(
+                    process.env.TENCENT_ASR_TIMEOUT_MS || 90000,
+                  ),
+                }),
+          () =>
+            config.probes && process.env.LAORENYUN_SPEECH_FIXTURE === "true"
+              ? fixtureTts
+              : new TencentTtsProvider({
+                  secretId: speechConfig().secretId,
+                  secretKey: speechConfig().secretKey,
+                  voice: speechConfig().voice,
+                  speed: speechConfig().speed,
+                  volume: Number(process.env.TENCENT_TTS_VOLUME || 0),
+                  timeoutMs: Number(
+                    process.env.TENCENT_TTS_TIMEOUT_MS || 60000,
+                  ),
+                }),
+        );
+        await speech.initialize();
 
+        const r = { id, root, app, speech } as Runtime;
+        await scope.run(r, async () => {
+          const installed = await installIntelligence(
+            ctx,
+            app.db,
+            resolve,
+            internalModel,
+          );
+          r.intelligence = installed.intelligence;
+          r.derived = new DerivedService(
+            app.db,
+            r.intelligence.model,
+            root,
+            (code) => ctx.logger.warn("laorenyun derived: " + code),
+          );
+          try {
+            await r.derived.start();
+          } catch (error) {
+            await Promise.allSettled([installed.close(), speech.close()]);
+            throw error;
+          }
+          r.close = async () => {
+            const results = await Promise.allSettled([
+              r.derived.close(),
+              installed.close(),
+              speech.close(),
+            ]);
+            if (results.some((result) => result.status === "rejected"))
+              throw new DomainError("ARCHIVE_CLOSE_FAILED", "archive shutdown");
+          };
+        });
+        return r;
+      })();
+      runtimes.set(id, pending);
+      pending.catch(() => runtimes.delete(id));
+    }
+    return pending;
+  };
+  ctx.provide("laorenyunMemory", {
+    forSession: async (id: string) =>
+      (await runtime(await archives.forSession(id))).intelligence,
+  });
   const resolve = async (id: string) => {
     if (!id || id.length > 128)
       throw new DomainError("INVALID_SESSION", "session identity");
@@ -102,20 +199,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       throw new DomainError("SESSION_ERROR", "interview is unavailable");
     return result.agent;
   };
-  const closeIntelligence = await installIntelligence(ctx, app.db, resolve);
-  const derived = new DerivedService(
-    app.db,
-    ctx.laorenyunMemory.model,
-    config.dataDir,
-    (code) => ctx.logger.warn("laorenyun derived: " + code),
-  );
-  await derived.start();
   ctx.effect(() => async () => {
-    await derived.close();
-    await closeIntelligence();
-    await speech.close();
-    await app.close();
+    const results = await Promise.allSettled(
+      [...runtimes.values()].map(async (pending) => (await pending).close()),
+    );
+    await shared.close();
+    if (results.some((r) => r.status === "rejected"))
+      ctx.logger.warn("laorenyun archive shutdown: resource close failed");
   });
+  for (const archive of archives.list()) await runtime(archive.id);
   const reconcile = async (id: string) => {
     const b = await app.db.call("getBranch", id);
     if (b) await resolve(b.parentSessionId);
@@ -176,82 +268,91 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     ctx.effect(() =>
       ctx.llm.registerAdapter(["laorenyun-fixture"], new FixtureLlm()),
     );
-  ctx.on("agent/pre-step", async ({ agent, messages, signal, step }, next) => {
-    if (step > 8) return { kind: "reject" };
-    const rejected = new Set<string>();
-    for (const message of messages) {
-      if (message.role !== "user") continue;
-      const input = browserHuman(String(agent.id), message);
-      if (!input) continue;
-      const receipt = await app.db.call("acceptHuman", input, {
-        signal,
-        deadline: Date.now() + 5000,
-      });
-      ctx.laorenyunMemory.memory.wake();
-      if (receipt.branch?.state === "closing" && receipt.transcript) {
-        // Public durable log admission; block any model step after the fifth answer.
-        if (
-          !agent.session
-            .snapshotEvents()
-            .some((e) => e.type === "user/message" && e.data.id === message.id)
-        ) {
-          const ref = parseSourceReference(input.text);
-          agent.session.append(
-            "user/message",
-            {
-              ...message,
-              content: [{ type: "text", text: ref.text }],
-              source: {
-                ...message.source,
-                ...(ref.sourceId ? { laorenyunSourceId: ref.sourceId } : {}),
-              },
-            },
-            { surfaceOp: "append" },
-          );
-          await agent.ctx.parallel("session/flush", agent.session);
+  ctx.on("agent/pre-step", async ({ agent, messages, signal, step }, next) =>
+    scope.run(
+      await runtime(await archives.forSession(String(agent.id))),
+      async () => {
+        if (step > 8) return { kind: "reject" };
+        const rejected = new Set<string>();
+        for (const message of messages) {
+          if (message.role !== "user") continue;
+          const input = browserHuman(String(agent.id), message);
+          if (!input) continue;
+          const receipt = await app.db.call("acceptHuman", input, {
+            signal,
+            deadline: Date.now() + 5000,
+          });
+          current().intelligence.memory.wake();
+          if (receipt.branch?.state === "closing" && receipt.transcript) {
+            // Public durable log admission; block any model step after the fifth answer.
+            if (
+              !agent.session
+                .snapshotEvents()
+                .some(
+                  (e) => e.type === "user/message" && e.data.id === message.id,
+                )
+            ) {
+              const ref = parseSourceReference(input.text);
+              agent.session.append(
+                "user/message",
+                {
+                  ...message,
+                  content: [{ type: "text", text: ref.text }],
+                  source: {
+                    ...message.source,
+                    ...(ref.sourceId
+                      ? { laorenyunSourceId: ref.sourceId }
+                      : {}),
+                  },
+                },
+                { surfaceOp: "append" },
+              );
+              await agent.ctx.parallel("session/flush", agent.session);
+            }
+            rejected.add(String(message.id));
+            await current().intelligence.finish(String(agent.id));
+          }
+          if (receipt.blocked && !receipt.transcript)
+            rejected.add(String(message.id));
         }
-        rejected.add(String(message.id));
-        await ctx.laorenyunMemory.finish(String(agent.id));
-      }
-      if (receipt.blocked && !receipt.transcript)
-        rejected.add(String(message.id));
-    }
-    if (rejected.size === messages.length && rejected.size > 0)
-      return { kind: "reject" };
-    const decision = await next();
-    if (decision.kind === "reject") return decision;
-    return {
-      ...decision,
-      messages: decision.messages
-        .filter((m) => !rejected.has(String(m.id)))
-        .map((m) => {
-          if (m.source.kind !== "user") return m;
-          const ref = parseSourceReference(
-            m.content
-              .filter((c) => c.type === "text")
-              .map((c) => c.text)
-              .join("\n"),
-          );
-          if (!ref.sourceId) return m;
-          return {
-            ...m,
-            source: { ...m.source, laorenyunSourceId: ref.sourceId },
-            content: m.content.map((c) =>
-              c.type === "text"
-                ? { ...c, text: parseSourceReference(c.text).text }
-                : c,
-            ),
-          };
-        }),
-    };
-  });
+        if (rejected.size === messages.length && rejected.size > 0)
+          return { kind: "reject" };
+        const decision = await next();
+        if (decision.kind === "reject") return decision;
+        return {
+          ...decision,
+          messages: decision.messages
+            .filter((m) => !rejected.has(String(m.id)))
+            .map((m) => {
+              if (m.source.kind !== "user") return m;
+              const ref = parseSourceReference(
+                m.content
+                  .filter((c) => c.type === "text")
+                  .map((c) => c.text)
+                  .join("\n"),
+              );
+              if (!ref.sourceId) return m;
+              return {
+                ...m,
+                source: { ...m.source, laorenyunSourceId: ref.sourceId },
+                content: m.content.map((c) =>
+                  c.type === "text"
+                    ? { ...c, text: parseSourceReference(c.text).text }
+                    : c,
+                ),
+              };
+            }),
+        };
+      },
+    ),
+  );
   ctx.effect(() =>
     ctx.webServer.register({
       kind: "exact",
       path: "/laorenyun/healthz",
       handler: async (_req, res) => {
         try {
-          await app.db.call("health", null, operation(1500));
+          await shared.call("health", null, operation(1500));
           res.writeHead(200, {
             "Content-Type": "application/json",
             "Cache-Control": "no-store",
@@ -264,6 +365,28 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       },
     }),
   );
+  const fetchRoute = (
+    entry: Parameters<typeof ctx.connection.fetch.register>[0],
+  ) => {
+    const fetch = entry.fetch;
+    return ctx.connection.fetch.register({
+      ...entry,
+      fetch: async (request) => {
+        try {
+          const id =
+            request.headers.get("X-Laorenyun-Archive") ??
+            new URL(request.url).searchParams.get("archive") ??
+            archives.defaultId;
+          return await scope.run(await runtime(id), () => fetch(request));
+        } catch {
+          return Response.json(
+            { ok: false, error: "ARCHIVE_UNAVAILABLE" },
+            { status: 400 },
+          );
+        }
+      },
+    });
+  };
   // Supported authenticated Fetch routes. This is a bounded application API,
   // not a replacement transport, router, or general RPC framework.
   const route = (
@@ -271,7 +394,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     handler: (body: Record<string, unknown>) => Promise<unknown>,
   ) =>
     ctx.effect(() =>
-      ctx.connection.fetch.register({
+      fetchRoute({
         path: `/api/laorenyun/${name}`,
         methods: ["POST"],
         requestBody: "streaming",
@@ -289,7 +412,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             const body: unknown = JSON.parse(bytes);
             if (!body || typeof body !== "object" || Array.isArray(body))
               throw new DomainError("INVALID_INPUT", "object required");
-            const value = await handler(body as Record<string, unknown>);
+            const input = body as Record<string, unknown>;
+            if (
+              typeof input.sessionId === "string" &&
+              input.sessionId &&
+              (await archives.forSession(input.sessionId)) !== current().id
+            )
+              throw new DomainError("ARCHIVE_MISMATCH", "session archive");
+            const value = await handler(input);
             return Response.json(
               { ok: true, value },
               { headers: { "Cache-Control": "no-store" } },
@@ -309,6 +439,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         },
       }),
     );
+  route("archives", async () => ({
+    defaultId: archives.defaultId,
+    items: archives.list(),
+  }));
+  route("archive-create", async (b) => archives.create(String(b.title ?? "")));
   route("river", async (b) =>
     app.db.call("river", {
       start: b.start === undefined ? undefined : Number(b.start),
@@ -354,6 +489,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const g = await app.db.call("derivedBegin", {
       id: String(b.id),
       kind: b.kind as Kind,
+      narrativeVersion: 2,
       sessionId: String(b.sessionId),
       route: { provider: c.provider, model: c.model },
       personaId: typeof b.personaId === "string" ? b.personaId : undefined,
@@ -378,7 +514,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     });
   });
   ctx.effect(() =>
-    ctx.connection.fetch.register({
+    fetchRoute({
       path: "/api/laorenyun/export-download",
       methods: ["GET"],
       requestBody: "buffered",
@@ -387,7 +523,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           const u = new URL(request.url),
             g = await app.db.call("derivedGet", u.searchParams.get("id") ?? ""),
             name = u.searchParams.get("name") ?? "";
-          const bytes = await readExport(config.dataDir, g, name);
+          const bytes = await readExport(current().root, g, name);
           return new Response(bytes as BodyInit, {
             headers: {
               "Content-Type":
@@ -408,7 +544,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }),
   );
   ctx.effect(() =>
-    ctx.connection.fetch.register({
+    fetchRoute({
       path: "/api/laorenyun/source-audio",
       methods: ["GET"],
       requestBody: "buffered",
@@ -444,18 +580,26 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   route("state", async (b) => {
     const sessionId = String(b.sessionId ?? "");
     const agent = sessionId ? await reconcile(sessionId) : null;
+    const receipts = sessionId
+      ? await app.db.call("getReceipts", sessionId)
+      : [];
+    const latest = receipts.at(-1)?.transcript;
+    const extraction = latest
+      ? await app.db.call("memoryOperation", `extract:${latest.id}`)
+      : null;
     return {
+      extracting:
+        !!extraction &&
+        ["pending", "running", "proposed"].includes(extraction.state),
       interview: sessionId
         ? await app.db.call("getInterview", sessionId)
         : null,
       reply: sessionId ? await app.db.call("getReply", sessionId) : null,
       processing: agent?.status === "running",
-      receipts: sessionId
-        ? (await app.db.call("getReceipts", sessionId)).map((r) => ({
-            state: r.state,
-            text: r.transcript.text,
-          }))
-        : [],
+      receipts: receipts.map((r) => ({
+        state: r.state,
+        text: r.transcript.text,
+      })),
       activeBranch: sessionId
         ? await app.db.call("getParentBranch", sessionId)
         : null,
@@ -551,7 +695,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     speech.recognize(String(b.sessionId), String(b.sourceId) as SourceId),
   );
   ctx.effect(() =>
-    ctx.connection.fetch.register({
+    fetchRoute({
       path: "/api/laorenyun/upload",
       methods: ["POST"],
       requestBody: "streaming",
@@ -561,6 +705,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             const url = new URL(request.url);
             const id = url.searchParams.get("sourceId") as SourceId;
             const sessionId = url.searchParams.get("sessionId");
+            if (
+              !sessionId ||
+              (await archives.forSession(sessionId)) !== current().id
+            )
+              throw new DomainError("ARCHIVE_MISMATCH", "upload");
             const source = await app.db.call("getSource", id);
             if (
               !source ||
@@ -632,7 +781,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }),
   );
   ctx.effect(() =>
-    ctx.connection.fetch.register({
+    fetchRoute({
       path: "/api/laorenyun/tts",
       methods: ["POST"],
       requestBody: "buffered",
@@ -642,6 +791,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             sessionId: string;
             messageId: string;
           };
+          if ((await archives.forSession(b.sessionId)) !== current().id)
+            throw new DomainError("ARCHIVE_MISMATCH", "tts");
           const audio = await speech.synthesize(b.sessionId, b.messageId);
           return new Response(Buffer.from(audio.bytes), {
             headers: {
@@ -666,7 +817,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       app.fakeDraft(String(b.sessionId), b.speaker as SpeakerIdentity),
     );
     route("evidence", async (b) => ({
-      health: await app.db.call("health", null),
+      health: await shared.call("health", null),
       transcripts: await app.db.call("listTranscripts", String(b.sessionId)),
       branch: await app.db.call("getBranch", String(b.sessionId)),
     }));

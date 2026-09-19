@@ -100,7 +100,9 @@ export function installMemoryTools(ctx: Context) {
         if (++budget.calls > 6)
           throw new DomainError("TOOL_BUDGET", "six memory queries per turn");
         const output = JSON.stringify(
-          await ctx.laorenyunMemory.db.call("timeline", {
+          await (
+            await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+          ).db.call("timeline", {
             ...(Object.fromEntries(
               Object.entries(args as Record<string, unknown>).filter(
                 ([, v]) => v !== null && v !== "",
@@ -138,10 +140,15 @@ export function installMemoryTools(ctx: Context) {
     execute: async (args, exec) => {
       if (!exec.agent) throw new DomainError("SESSION_REQUIRED", "branch");
       const id = String(exec.agent.id);
-      const latest = (await ctx.laorenyunMemory.db.call("getReceipts", id))[0]
-        ?.transcript;
+      const latest = (
+        await (
+          await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+        ).db.call("getReceipts", id)
+      )[0]?.transcript;
       if (!latest) throw new DomainError("SOURCE_REQUIRED", "branch proposal");
-      const b = await ctx.laorenyunMemory.db.call("branchProposal", {
+      const b = await (
+        await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+      ).db.call("branchProposal", {
         parentSessionId: id,
         transcriptId: latest.id,
         ...(args as { topic: string; returnAnchor: string }),
@@ -164,10 +171,14 @@ export function installMemoryTools(ctx: Context) {
     execute: async (_args, exec) => {
       if (!exec.agent) throw new DomainError("SESSION_REQUIRED", "branch");
       const latest = (
-        await ctx.laorenyunMemory.db.call("getReceipts", String(exec.agent.id))
+        await (
+          await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+        ).db.call("getReceipts", String(exec.agent.id))
       )[0]?.transcript;
       if (!latest) throw new DomainError("CONSENT_REQUIRED", "answer");
-      const b = await ctx.laorenyunMemory.activate(exec.agent, latest.id);
+      const b = await (
+        await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+      ).activate(exec.agent, latest.id);
       if (b.state === "active") exec.concludeTurn();
       return b.state === "active"
         ? "支线已开始，界面将进入侧题。"
@@ -184,7 +195,9 @@ export function installMemoryTools(ctx: Context) {
     },
     execute: async (_args, exec) => {
       if (!exec.agent) throw new DomainError("SESSION_REQUIRED", "branch");
-      await ctx.laorenyunMemory.finish(String(exec.agent.id));
+      await (
+        await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+      ).finish(String(exec.agent.id));
       exec.concludeTurn();
       return "支线已保存，正在回到主采访。";
     },
@@ -218,12 +231,21 @@ export function installMemoryTools(ctx: Context) {
     execute: async (args, exec) => {
       if (!exec.agent) throw new DomainError("SESSION_REQUIRED", "schedule");
       const id = String(exec.agent.id);
-      if (await ctx.laorenyunMemory.db.call("getBranch", id))
+      if (
+        await (
+          await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+        ).db.call("getBranch", id)
+      )
         throw new DomainError("MAIN_ONLY", "schedule");
-      const latest = (await ctx.laorenyunMemory.db.call("getReceipts", id))[0]
-        ?.transcript;
+      const latest = (
+        await (
+          await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+        ).db.call("getReceipts", id)
+      )[0]?.transcript;
       if (!latest) return "继续当前线索。";
-      const result = await ctx.laorenyunMemory.db.call("schedule", {
+      const result = await (
+        await ctx.laorenyunMemory.forSession(String(exec.agent!.id))
+      ).db.call("schedule", {
         ...(args as {
           boundary: boolean;
           userChoseTopic: boolean;
@@ -245,10 +267,9 @@ export function installMemoryTools(ctx: Context) {
     const value = await next();
     if (!context.agent) return value;
     value.contexts = []; // This preset owns the complete bounded interview context.
-    const branch = await ctx.laorenyunMemory.db.call(
-      "getBranch",
-      String(context.agent.id),
-    );
+    const branch = await (
+      await ctx.laorenyunMemory.forSession(String(context.agent!.id))
+    ).db.call("getBranch", String(context.agent.id));
     if (branch?.topic) {
       value.tools = value.tools.filter((t) =>
         ["interview_reference", "interview_finish_branch"].includes(t.name),
@@ -272,16 +293,22 @@ export function installMemoryTools(ctx: Context) {
     );
     try {
       const [overview, conflicts, unresolved] = await Promise.all([
-        ctx.laorenyunMemory.db.call("timeline", {
+        (
+          await ctx.laorenyunMemory.forSession(String(context.agent!.id))
+        ).db.call("timeline", {
           method: "overview",
           sessionId: String(context.agent.id),
           limit: 12,
         }),
-        ctx.laorenyunMemory.db.call("timeline", {
+        (
+          await ctx.laorenyunMemory.forSession(String(context.agent!.id))
+        ).db.call("timeline", {
           method: "get_conflicts",
           limit: 3,
         }),
-        ctx.laorenyunMemory.db.call("timeline", {
+        (
+          await ctx.laorenyunMemory.forSession(String(context.agent!.id))
+        ).db.call("timeline", {
           method: "get_unresolved",
           limit: 2,
         }),

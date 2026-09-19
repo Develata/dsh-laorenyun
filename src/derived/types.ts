@@ -63,6 +63,7 @@ export interface Section {
   nodeRefs: string[];
   sourceRefs: string[];
   status: "validated";
+  paragraphs?: import("./narrative.ts").NarrativeParagraph[];
 }
 export interface Biography {
   id: string;
@@ -70,6 +71,8 @@ export interface Biography {
   sections: Section[];
   omittedConflicts: string[];
   personaId: string | null;
+  narrativeVersion?: 2;
+  facts?: import("./narrative.ts").FactAtom[];
 }
 export interface ExportResult {
   files: Array<{
@@ -88,12 +91,18 @@ export interface Generation {
   inputHash: string;
   manifest: Manifest;
   route: ModelRoute;
-  promptVersion: "phase4-v1";
+  promptVersion: "phase4-v1" | "narrative-v2";
   progress: string;
   result: Persona | Biography | ExportResult | null;
   candidates: Section[];
+  reviews?: {
+    chapterId: string;
+    attempt: number;
+    report: import("./narrative.ts").ClaimReview;
+  }[];
   evidence: ModelEvidence[];
   error?: string;
+  validationReason?: string;
 }
 export type GenerationSummary = Pick<
   Generation,

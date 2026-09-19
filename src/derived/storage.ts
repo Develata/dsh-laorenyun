@@ -74,6 +74,7 @@ export class PresentationStorage {
     route: Generation["route"];
     personaId?: string;
     biographyId?: string;
+    narrativeVersion?: 2;
   }): Generation {
     return this.graph.tx(() => {
       if (
@@ -112,7 +113,8 @@ export class PresentationStorage {
         inputHash: createHash("sha256")
           .update(JSON.stringify(manifest))
           .digest("hex"),
-        promptVersion: "phase4-v1",
+        promptVersion:
+          input.narrativeVersion === 2 ? "narrative-v2" : "phase4-v1",
         progress: "pending",
         result: null,
         candidates: [],

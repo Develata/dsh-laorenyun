@@ -3,7 +3,7 @@
 Owner：插件slot/state/theme适配；产品要求见[应用06](https://github.com/Develata/laorenyun/blob/main/docs/06-ui-ux.md)。代码在[src/client](../src/client/)，证据见[phase-2](phase-2.md)。
 
 - 原生conversation与composer保留。左侧slot贡献speaker、主麦克风、保存/识别状态、恢复草稿、再听、暂停；不新建编辑器。
-- sidebar贡献采访/人生长河；无session时用公开sessions.create/open；river在Phase4由main slot的真实SVG长河替代。
+- sidebar贡献讲故事/人生长河/我的自传，保留原生设置；Workspace为人物档案，Session为采访记录。无session时用公开sessions.create/open。
 - theme通过官方注册和alias覆盖，暖白/浅绿/深灰，原生字号17；不改Web核心。
 - 普通profile通过公开keyed chat slots隐藏system/context/turn-process，并呈现不含技术marker的用户正文。开发profile保留诊断与显式fixture。权限仍由Host/preset控制，隐藏不是授权。
 
@@ -17,7 +17,15 @@ Source/speaker/recognition/receipt由Host轮询；录音stop后的Blob由Indexed
 
 照片仍属后续P1；真实长河见下方Phase4。移动麦克风需要HTTPS安全上下文，不能禁用浏览器安全机制。
 
-## Phase 4
+## v0.2 当前界面
+
+公开 branding slots 提供云河标志与老人云；原生折叠侧栏、人物档案成员关系和右侧 docking 均复用 DSH。普通设置仅显示/AI模型/语音服务；模型与密钥使用原生 settings/credentials，不改变 restricted preset。
+
+长河、记忆详情、自传阅读为独立展示面。纵向 SVG 中心线不自交，实际 arc length 映射月份；真实子路径表示区间。小屏采用左河右文单列，年代导航提供密度与当前位置；同区间密集节点聚合，列表浏览为显式替代。漂流湾不赋予日期。动画只改变水流装饰，reduced-motion 静止。
+
+Persona 结果展示五类中文观察/引文/资料不足，成功后默认用于下一次自传；可以关闭。结果、正文和导出归我的自传。详见 [v0.2证据](v0.2.md)。
+
+## Phase 4 历史基线
 
 [MemoryRiver](../src/client/river.tsx)替换placeholder，复用main slot。导航为“讲故事/人生长河”。SVG语义只表示时间，选中时才画≤10相关线；年代列表提供完整键盘操作。未知时间独立列表，区间与candidate同时有文字，不只颜色。
 

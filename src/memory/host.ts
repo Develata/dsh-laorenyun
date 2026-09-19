@@ -17,16 +17,17 @@ export interface Intelligence {
 }
 declare module "@deepseek-ai/cordis" {
   interface Context {
-    laorenyunMemory: Intelligence;
+    laorenyunMemory: { forSession(id: string): Promise<Intelligence> };
   }
 }
 export async function installIntelligence(
   ctx: Context,
   db: DomainDatabase,
   resolve: (id: string) => Promise<Agent>,
+  sharedModel?: InternalModel,
 ) {
   const stop = new AbortController(),
-    model = new InternalModel(ctx.llm);
+    model = sharedModel ?? new InternalModel(ctx.llm);
   const resolveBounded = async (id: string) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -206,7 +207,7 @@ export async function installIntelligence(
         recovery = null;
       });
   };
-  ctx.provide("laorenyunMemory", {
+  const intelligence = {
     db,
     memory,
     model,
@@ -215,15 +216,18 @@ export async function installIntelligence(
       await db.call("branchClosing", id);
       tick();
     },
-  } satisfies Intelligence);
+  } satisfies Intelligence;
   await memory.start();
   const timer = setInterval(tick, 2000);
   timer.unref();
   tick();
-  return async () => {
-    clearInterval(timer);
-    stop.abort();
-    await memory.close();
-    await recovery;
+  return {
+    intelligence,
+    close: async () => {
+      clearInterval(timer);
+      stop.abort();
+      await memory.close();
+      await recovery;
+    },
   };
 }

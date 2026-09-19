@@ -27,3 +27,7 @@ Phase 3 不增加运行依赖；只复用固定DSH的公开LLM/agent/session/sub
 ## Phase 4
 
 没有新增运行依赖。长河使用浏览器原生SVG几何API和一个本项目固定路径；没有复制D3实现、字体、图片或图形资产。调研了d3-shape 3.2.0（ISC）、d3-path 3.1.0（ISC），安装动作被环境自动审批拒绝后选用原生API；二者未打包进入本发行。静态HTML使用系统字体，无远端资源。内部任务复用既有DSH模型API；原许可义务不变。
+
+## v0.2
+
+新增开发类型依赖均为固定 `@deepseek-ai/*@0.1.6-alpha.1` 的公开 sidebar/sidebar-right/settings/settings-general/workspace/ui-workspace 接口。沿用发行中已有 DSH MIT 实现，不内联第二份 DSH/React。品牌 SVG、河道路径和 CSS 为本项目原创；参考网站只研究交互，不复制图片、字体或代码。仍无 D3/新运行框架。

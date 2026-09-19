@@ -10,6 +10,35 @@ export interface ModelEvidence {
 }
 export class InternalModel {
   private active = 0;
+  private waiting: Array<() => void> = [];
+  private async acquire(signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    if (this.active < 2) {
+      this.active++;
+      return;
+    }
+    if (this.waiting.length >= 32)
+      throw new DomainError("MODEL_BUSY", "internal admission queue full");
+    await new Promise<void>((resolve, reject) => {
+      const grant = () => {
+        signal.removeEventListener("abort", cancel);
+        this.active++;
+        resolve();
+      };
+      const cancel = () => {
+        const i = this.waiting.indexOf(grant);
+        if (i >= 0) this.waiting.splice(i, 1);
+        reject(new DomainError("MODEL_TIMEOUT", "internal admission deadline"));
+      };
+      this.waiting.push(grant);
+      signal.addEventListener("abort", cancel, { once: true });
+      if (signal.aborted) cancel();
+    });
+  }
+  private release() {
+    this.active--;
+    this.waiting.shift()?.();
+  }
   private llm: Pick<LlmRuntime, "stream">;
   constructor(llm: Pick<LlmRuntime, "stream">) {
     this.llm = llm;
@@ -21,11 +50,9 @@ export class InternalModel {
     parse: (text: string) => T,
     signal: AbortSignal,
   ): Promise<{ value: T; evidence: ModelEvidence }> {
-    if (this.active >= 2)
-      throw new DomainError("MODEL_BUSY", "two internal operations active");
-    this.active++;
     const start = Date.now();
     const bounded = AbortSignal.any([signal, AbortSignal.timeout(60000)]);
+    await this.acquire(bounded);
     try {
       let repair = false;
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -96,7 +123,7 @@ export class InternalModel {
       }
       throw new DomainError("MODEL_FORMAT", "no result");
     } finally {
-      this.active--;
+      this.release();
     }
   }
   extract(route: ModelRoute, input: ExtractionInput, signal: AbortSignal) {

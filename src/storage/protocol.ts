@@ -50,6 +50,7 @@ export interface Operations {
       route: import("../memory/model.ts").ModelRoute;
       personaId?: string;
       biographyId?: string;
+      narrativeVersion?: 2;
     };
     output: import("../derived/types.ts").Generation;
   };
@@ -212,6 +213,8 @@ export type WorkerRequest = {
     method: K;
     input: Operations[K]["input"];
     deadline: number;
+    /** Internal store selection, never accepted from browser input. */
+    archivePath?: string;
   };
 }[Method];
 export type WorkerResponse =

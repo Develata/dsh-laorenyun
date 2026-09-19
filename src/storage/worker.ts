@@ -41,8 +41,36 @@ try {
   port.close();
   throw error;
 }
-const graph = new GraphStorage(db);
-const presentation = new PresentationStorage(db, graph);
+let graph = new GraphStorage(db);
+let presentation = new PresentationStorage(db, graph);
+const stores = new Map([
+  [workerData.path as string, { db, graph, presentation }],
+]);
+function selectStore(path: string) {
+  let store = stores.get(path);
+  if (!store) {
+    if (stores.size >= 32)
+      throw new DomainError("ARCHIVE_LIMIT", "at most 32 open archives");
+    const connection = new DatabaseSync(path, { timeout: 100 });
+    try {
+      connection.exec(
+        "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL",
+      );
+      migrate(connection);
+      const graph = new GraphStorage(connection);
+      store = {
+        db: connection,
+        graph,
+        presentation: new PresentationStorage(connection, graph),
+      };
+      stores.set(path, store);
+    } catch (e) {
+      connection.close();
+      throw e;
+    }
+  }
+  ({ db, graph, presentation } = store);
+}
 function read<T>(sql: string, ...params: string[]): T | null {
   const row = db.prepare(sql).get(...params);
   return row ? (JSON.parse(String(row.json)) as T) : null;
@@ -893,12 +921,13 @@ function handle(r: WorkerRequest): unknown {
     case "getBranch":
       return branch(r.input);
     case "close":
-      db.close();
+      for (const store of stores.values()) store.db.close();
       return null;
   }
 }
 port.on("message", (request: WorkerRequest) => {
   try {
+    selectStore(request.archivePath ?? workerData.path);
     const value = handle(request);
     port.postMessage({
       id: request.id,

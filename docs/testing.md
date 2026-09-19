@@ -28,3 +28,9 @@ Owner：模块检查与测试入口。产品验收见[应用11](https://github.c
 ## 最终发行
 
 执行`pnpm check`、`pnpm format:check`；`.github/workflows/ci.yml`不调用付费云。可选独立空目录运行demo CLI的`--scale`，事实/限制见[Phase5](phase-5.md)。
+
+## v0.2
+
+`pnpm check` 包含多档案同 worker 隔离/重开、默认档案迁移幂等、文字/语音接受与抽取同源、模型有界排队、弧长区间和 narrative-v2 引用/审校/多事实段落/WHAT-HOW 测试。
+
+发行库 `scripts/smoke-v02.mjs` 是显式 opt-in 真实模型浏览器门禁：新档案原生纯文字提交，检查无媒体来源、抽取节点、同档案新采访、跨档案拒绝、刷新；`--verify-restart` 在受控容器重启后复核同一批证据。只能对隔离测试项目运行，私密启动日志路径经环境变量传入，不打印授权URL；不在普通CI运行。视觉、设置、模型输出的实测边界见 [v0.2](v0.2.md)。

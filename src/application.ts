@@ -18,8 +18,13 @@ export class Foundation {
     this.db = db;
     this.recordings = store;
   }
-  static async open(root: string): Promise<Foundation> {
-    const db = await DomainDatabase.open(root);
+  static async open(
+    root: string,
+    shared?: DomainDatabase,
+  ): Promise<Foundation> {
+    const db = shared
+      ? await shared.scope(root)
+      : await DomainDatabase.open(root);
     const store = new FileRecordingStore(root, db);
     try {
       await store.initialize(operation(10000));

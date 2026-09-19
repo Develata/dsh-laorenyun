@@ -21,6 +21,8 @@ export class DomainDatabase {
     }
   >();
   private stopped = false;
+  private scopedRoot: string | undefined;
+  private owner: DomainDatabase | undefined;
   private ready: Promise<void>;
   private constructor(path: string, workerUrl: URL) {
     this.worker = new Worker(workerUrl, { workerData: { path } });
@@ -76,10 +78,28 @@ export class DomainDatabase {
       throw e;
     }
   }
+  async scope(root: string): Promise<DomainDatabase> {
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    const view = Object.create(DomainDatabase.prototype) as DomainDatabase;
+    view.owner = this.owner ?? this;
+    view.scopedRoot = join(root, "laorenyun.db");
+    await view.call("health", null);
+    return view;
+  }
   async call<K extends Method>(
     method: K,
     input: Operations[K]["input"],
     op: OperationContext = operation(),
+  ): Promise<Operations[K]["output"]> {
+    if (this.owner)
+      return this.owner.dispatch(method, input, op, this.scopedRoot);
+    return this.dispatch(method, input, op);
+  }
+  private async dispatch<K extends Method>(
+    method: K,
+    input: Operations[K]["input"],
+    op: OperationContext,
+    archivePath?: string,
   ): Promise<Operations[K]["output"]> {
     checkOperation(op);
     await this.ready;
@@ -118,7 +138,13 @@ export class DomainDatabase {
         },
       });
       try {
-        this.worker.postMessage({ id, method, input, deadline: op.deadline });
+        this.worker.postMessage({
+          id,
+          method,
+          input,
+          deadline: op.deadline,
+          archivePath,
+        });
       } catch (e) {
         const p = this.pending.get(id);
         this.pending.delete(id);
@@ -161,6 +187,7 @@ export class DomainDatabase {
     await this.terminate();
   }
   async close(): Promise<void> {
+    if (this.owner) return; // worker lifetime belongs to the root owner
     if (this.stopped) return;
     try {
       await this.call("close", null, operation(3000));
