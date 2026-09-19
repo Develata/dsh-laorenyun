@@ -11,6 +11,7 @@ export interface RiverQuery {
   drifting?: boolean;
 }
 export interface RiverSnapshot {
+  storyGroups?: { nodeIds: string[] }[];
   graphRevision: number;
   nodes: RiverNode[];
   total: number;

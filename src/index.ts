@@ -590,7 +590,17 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return {
       extracting:
         !!extraction &&
-        ["pending", "running", "proposed"].includes(extraction.state),
+        ["pending", "running", "proposed", "validated"].includes(
+          extraction.state,
+        ),
+      memoryFeedback: !latest
+        ? "none"
+        : extraction?.state === "applied" &&
+            !!extraction.result?.proposals.length
+          ? "added"
+          : extraction?.state === "failed"
+            ? "failed"
+            : "saved",
       interview: sessionId
         ? await app.db.call("getInterview", sessionId)
         : null,

@@ -73,7 +73,7 @@ export function BiographyView({
       )}
       {persona && (
         <section className="ly-persona-result">
-          <h2>我的表达画像</h2>
+          <h2>我的表达方式</h2>
           <p>使用了 {persona.transcriptIds.length} 段本人讲述</p>
           <label>
             <input
@@ -91,9 +91,9 @@ export function BiographyView({
                 {
                   {
                     lexical: "常用表达",
-                    ordering: "叙事习惯",
-                    rhythm: "句子与节奏",
-                    address: "怎样称呼他人",
+                    ordering: "讲故事的习惯",
+                    rhythm: "句子和节奏",
+                    address: "怎么称呼家里人",
                     emotion: "情绪表达",
                   }[category]
                 }

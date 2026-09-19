@@ -399,8 +399,18 @@ export class PresentationStorage {
       (e) =>
         ids.has(e.from as GraphNode["id"]) && ids.has(e.to as GraphNode["id"]),
     );
+    const storyGroups = this.rows<{ related_memory_nodes?: string[] }>(
+      "SELECT json_object('related_memory_nodes',json_extract(json,'$.related_memory_nodes')) json FROM branch_memos ORDER BY branch_id LIMIT 100",
+    )
+      .map((m) => ({
+        nodeIds: (m.related_memory_nodes ?? [])
+          .filter((id) => ids.has(id as GraphNode["id"]))
+          .slice(0, 24),
+      }))
+      .filter((g) => g.nodeIds.length > 1);
     return {
       graphRevision: this.graph.revision(),
+      storyGroups,
       nodes: all.map((n) => ({
         id: n.id,
         revision: n.revision,

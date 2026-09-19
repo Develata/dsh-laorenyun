@@ -1,3 +1,5 @@
+import { StoryForest } from "./story-trees.tsx";
+import { storyTrees } from "../river/trees.ts";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { RiverSnapshot } from "../river/types.ts";
 import { anchors, arcPosition, timeLabel } from "../river/layout.ts";
@@ -22,6 +24,7 @@ export function Journey({
     } | null>(null);
   // Never join coordinates from the previous revision/filter to a new node array.
   const layout = projection?.input === data ? projection.points : [];
+  const [extent, setExtent] = useState(0);
   const [cluster, setCluster] = useState<string[] | null>(null);
   const [list, setList] = useState(false),
     [decade, setDecade] = useState<number | null>(null);
@@ -201,8 +204,8 @@ export function Journey({
           <>
             <svg
               width={geometry.width}
-              height={geometry.height}
-              viewBox={`0 0 ${geometry.width} ${geometry.height}`}
+              height={Math.max(geometry.height, extent)}
+              viewBox={`0 0 ${geometry.width} ${Math.max(geometry.height, extent)}`}
               aria-label="人生长河，沿河向下时间前进"
               role="group"
             >
@@ -237,127 +240,20 @@ export function Journey({
                     pointerEvents="none"
                   />
                 ))}
-              {clusters.map((group) => {
-                const p = group[0]!;
-                return (
-                  <g
-                    key={p.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`这一段岁月的${group.length}条记忆`}
-                    onClick={() => setCluster(group.map((n) => n.id))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setCluster(group.map((n) => n.id));
-                      }
-                    }}
-                  >
-                    <ellipse
-                      cx={p.x + 70}
-                      cy={p.y}
-                      rx={25}
-                      ry={20}
-                      className="ly-stone"
-                    />
-                    <text
-                      x={p.x + 70}
-                      y={p.y + 6}
-                      textAnchor="middle"
-                      fill="#fff"
-                      fontSize="17"
-                    >
-                      {group.length}
-                    </text>
-                  </g>
-                );
-              })}
-              {layout.map((p, i) => {
-                if (clustered.has(p.id)) return null;
-                const n = dated[i]!.node;
-                const lane = dated[i]!.lane;
-                const side =
-                    width < 520
-                      ? 1
-                      : lane
-                        ? Math.sign(lane)
-                        : dated[i + 1]?.month === dated[i]!.month
-                          ? -1
-                          : i % 2
-                            ? 1
-                            : -1,
-                  offset = width < 520 ? 42 : 70;
-                return (
-                  <g
-                    key={p.id}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`${timeLabel(n)}：${n.keySentence}${n.hasOpenConflict ? "，有不同说法" : ""}`}
-                    onClick={() => onSelect(p.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onSelect(p.id);
-                      }
-                    }}
-                  >
-                    <path
-                      d={`M ${p.x} ${p.y} Q ${p.x + side * offset * 0.4} ${p.y + 15} ${p.x + side * offset} ${p.y}`}
-                      className="ly-stem"
-                    />
-                    <ellipse
-                      cx={p.x + side * offset}
-                      cy={p.y}
-                      rx="18"
-                      ry="13"
-                      transform={`rotate(${side * -20} ${p.x + side * offset} ${p.y})`}
-                      className={`ly-stone ${n.status === "confirmed" && !n.hasOpenConflict ? "" : "ly-stone-uncertain"}`}
-                    />
-                    <text
-                      x={p.x + side * offset}
-                      y={p.y + 5}
-                      textAnchor="middle"
-                      fontSize="13"
-                      fill="#fcfaf3"
-                    >
-                      {n.hasOpenConflict
-                        ? "!"
-                        : n.status === "candidate"
-                          ? "?"
-                          : ""}
-                    </text>
-                    <title>
-                      {timeLabel(n)} · {n.keySentence}
-                    </title>
-                    {labels.has(p.id) && (
-                      <foreignObject
-                        x={
-                          width < 520
-                            ? p.x + offset + 22
-                            : side < 0
-                              ? Math.max(0, p.x - offset - 250)
-                              : p.x + offset + 25
-                        }
-                        y={p.y - 45}
-                        width={
-                          width < 520
-                            ? Math.max(120, width - p.x - offset - 30)
-                            : Math.min(230, width * 0.28)
-                        }
-                        height="125"
-                      >
-                        <div className="ly-bank-caption" data-side={side}>
-                          <small>{timeLabel(n)}</small>
-                          <p>{n.keySentence}</p>
-                        </div>
-                      </foreignObject>
-                    )}
-                  </g>
-                );
-              })}
+              {path.current && layout.length > 0 && (
+                <StoryForest
+                  key={String(data.graphRevision) + range}
+                  data={data}
+                  path={path.current}
+                  min={min}
+                  max={max}
+                  width={width}
+                  onSelect={onSelect}
+                />
+              )}
             </svg>
             <p className="ly-river-key">
-              沿河距离是年月；浅金河段是时间范围。选择一片河岸记忆，读它的故事。
+              沿主河是年月，支流展开故事细节。数字表示可展开的故事；虚线分组只为浏览，不代表事件关系。
             </p>
           </>
         )}
@@ -366,18 +262,31 @@ export function Journey({
         <small>年月未定，故事仍在</small>
         <h2>漂流湾</h2>
         <p>有些往事还没有找到年月，先让它们在这里停一停。</p>
-        <div className="ly-bay-leaves">
-          {drift.map((n, i) => (
-            <button
-              key={n.id}
-              style={{ animationDelay: `${i % 4}s` }}
-              onClick={() => onSelect(n.id)}
-            >
-              {n.keySentence}
-              <span>读这段记忆 ↗</span>
-            </button>
-          ))}
-        </div>
+        {drift.length > 0 && (
+          <svg
+            className="ly-grove"
+            width={width}
+            height={Math.max(
+              360,
+              storyTrees(data).filter((t) => t.drifting).length * 900,
+            )}
+            role="group"
+            aria-label="漂流湾故事群"
+          >
+            <StoryForest
+              data={data}
+              path={{
+                getTotalLength: () => 500,
+                getPointAtLength: (s) => ({ x: width / 2, y: s }),
+              }}
+              min={0}
+              max={0}
+              width={width}
+              onSelect={onSelect}
+              drifting
+            />
+          </svg>
+        )}
         {!drift.length && <p>暂时没有漂流记忆。</p>}
       </section>
     </>

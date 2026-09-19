@@ -1,3 +1,5 @@
+import { memoryPreview } from "./memory-preview.ts";
+import { archiveSelection } from "./archive-context.ts";
 import { Journey } from "./journey.tsx";
 import { MemoryDetail } from "./memory-detail.tsx";
 import { BiographyView } from "./biography.tsx";
@@ -128,6 +130,15 @@ export function MemoryRiver({
     }
   };
   useEffect(() => {
+    const open = () => {
+      const p = memoryPreview.getSnapshot();
+      if (p?.full && p.archive === archiveSelection.getSnapshot())
+        void select(p.node.id);
+    };
+    open();
+    return memoryPreview.subscribe(open);
+  }, []);
+  useEffect(() => {
     if (
       detail &&
       data &&
@@ -201,8 +212,8 @@ export function MemoryRiver({
             <>
               {data.total === 0 && (
                 <p>
-                  讲一段往事，长河便开始生长。
-                  <button onClick={onInterview}>去讲故事</button>
+                  这里还没有故事。每一次讲述，都会慢慢汇入您的人生长河。
+                  <button onClick={onInterview}>去讲第一个故事</button>
                 </p>
               )}
               <Journey

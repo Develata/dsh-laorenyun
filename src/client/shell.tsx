@@ -1,3 +1,4 @@
+import { memoryPreview } from "./memory-preview.ts";
 import { installModelChoice } from "./model-choice.tsx";
 import { installSpeechSettings } from "./speech-settings.tsx";
 import React, { useEffect, useState, useSyncExternalStore } from "react";
@@ -235,7 +236,21 @@ export async function installShell(
       </section>
     );
   }
+  ctx.effect(() =>
+    memoryPreview.subscribe(() => {
+      const p = memoryPreview.getSnapshot();
+      if (p?.archive !== archiveSelection.getSnapshot()) return;
+      if (p?.full) ctx.layout.selectPanel("laorenyun-river" as MainPanelId);
+      else if (p && window.innerWidth >= 900)
+        ctx.sidebarRight.openTab("laorenyun-river-preview");
+    }),
+  );
+  ctx.effect(() => archiveSelection.subscribe(() => memoryPreview.clear()));
   function Preview() {
+    const preview = useSyncExternalStore(
+      memoryPreview.subscribe,
+      memoryPreview.getSnapshot,
+    );
     const activeArchive = useSyncExternalStore(
       archiveSelection.subscribe,
       archiveSelection.getSnapshot,
@@ -258,11 +273,28 @@ export async function installShell(
         <h2>人生长河导航</h2>
         <p>采访时，随时看一眼走过的年月。</p>
         {error && <p role="status">暂时无法打开记忆，请重新打开导航。</p>}
-        {data?.nodes.slice(0, 8).map((n) => (
-          <p key={n.id}>
-            {n.time.originalText || "漂流记忆"} · {n.keySentence}
-          </p>
-        ))}
+        {preview && preview.archive === activeArchive && (
+          <section>
+            <h3>{preview.node.keySentence}</h3>
+            <p>
+              {preview.node.time.originalText || "年月未定"} ·{" "}
+              {preview.branchCount} 个相关故事
+            </p>
+            <button
+              onClick={() =>
+                memoryPreview.show(preview.node, preview.branchCount, true)
+              }
+            >
+              查看完整故事 →
+            </button>
+          </section>
+        )}
+        {!preview &&
+          data?.nodes.slice(0, 8).map((n) => (
+            <p key={n.id}>
+              {n.time.originalText || "漂流记忆"} · {n.keySentence}
+            </p>
+          ))}
         <button
           style={{
             font: "inherit",

@@ -193,6 +193,7 @@ export async function apply(ctx: Context): Promise<void> {
     const [stage, setStage] = useState("ready");
     const [processing, setProcessing] = useState(false);
     const [extracting, setExtracting] = useState(false);
+    const [memoryFeedback, setMemoryFeedback] = useState("none");
     const [playState, setPlayState] = useState<PlaybackState>("idle");
     const [seconds, setSeconds] = useState(0);
     const [warning, setWarning] = useState(false);
@@ -296,6 +297,7 @@ export async function apply(ctx: Context): Promise<void> {
             reply: AssistantReply | null;
             processing: boolean;
             extracting: boolean;
+            memoryFeedback: string;
             receipts: { state: string; text: string }[];
           }>("state", { sessionId }, controller.current.signal);
           if (!mounted.current) return;
@@ -328,6 +330,7 @@ export async function apply(ctx: Context): Promise<void> {
           setReply(v.reply);
           setProcessing(v.processing);
           setExtracting(v.extracting);
+          setMemoryFeedback(v.memoryFeedback);
           setUncertain(
             !v.processing
               ? (v.receipts.find((r) => r.state === "domain-accepted")?.text ??
@@ -548,7 +551,13 @@ export async function apply(ctx: Context): Promise<void> {
           width: "100%",
         }}
       >
-        <style>{`.ly-interview-controls button,.ly-interview-controls select{font:inherit;min-height:44px;border:1px solid #9aab9e;border-radius:6px;color:inherit;background:#f4f0e5;padding:8px 12px}.ly-interview-controls button:focus-visible,.ly-interview-controls select:focus-visible{outline:3px solid #47796a;outline-offset:2px}.ly-interview-controls button:disabled{opacity:.5}.ly-interview-controls small{font-size:14px;line-height:1.7}`}</style>
+        <style>{`.ly-interview-controls button,.ly-interview-controls select{font:inherit;min-height:44px;border:1px solid #9aab9e;border-radius:6px;color:inherit;background:#f4f0e5;padding:8px 12px}.ly-interview-controls button:focus-visible,.ly-interview-controls select:focus-visible{outline:3px solid #47796a;outline-offset:2px}.ly-interview-controls button:disabled{opacity:.5}.ly-interview-controls small{font-size:14px;line-height:1.7}.ly-current-question{flex-basis:100%;border-left:3px solid #b29764;padding:6px 16px;max-height:180px;overflow:auto}.ly-current-question small{color:#64776b;letter-spacing:.1em}.ly-current-question p{font:22px/1.7 serif;margin:4px 0;color:#284b40}.ly-memory-feedback{flex-basis:100%;font-size:15px;color:#527464}@media(max-width:520px){.ly-current-question{max-height:125px}.ly-current-question p{font-size:19px}}`}</style>
+        {reply && (
+          <div className="ly-current-question">
+            <small>AI 想问您</small>
+            <p>{reply.text}</p>
+          </div>
+        )}
         {!initialized && loaded && (
           <button
             style={{
@@ -633,7 +642,17 @@ export async function apply(ctx: Context): Promise<void> {
           </span>
         )}
         {processing && <span role="status">正在听您讲的故事，请稍等…</span>}
-        {extracting && <span role="status">正在整理这段记忆…</span>}
+        {memoryFeedback !== "none" && (
+          <span className="ly-memory-feedback" role="status">
+            {extracting
+              ? "✓ 已保存您的讲述 · 正在整理进人生长河…"
+              : memoryFeedback === "added"
+                ? "✓ 已加入人生长河"
+                : memoryFeedback === "failed"
+                  ? "✓ 讲述已保存，记忆暂未整理完成"
+                  : "✓ 已保存您的讲述"}
+          </span>
+        )}
         {playState === "generating" && <span role="status">正在准备朗读…</span>}
         {pending && stage === "ready" && (
           <button
