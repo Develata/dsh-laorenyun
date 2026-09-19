@@ -744,3 +744,36 @@ test("atomic approval cannot hide a sentence-level childhood scope borrowed by a
     [],
   );
 });
+
+test("child is offspring provenance, never the narrator's childhood or a spouse", () => {
+  const fact = {
+    ...f("F001", "家里用煤油灯照明"),
+    sourceMode: "nonself" as const,
+    attribution: { required: true, speakerRoles: ["child"] },
+  };
+  for (const surface of ["小时候的我说", "孩子时的我说", "配偶说"]) {
+    assert.ok(
+      paragraphProblems(
+        {
+          text: surface + "，家里用煤油灯照明。",
+          factRefs: [fact.id],
+          attributions: [{ factRef: fact.id, surface }],
+        },
+        [fact],
+      ).includes("MISSING_ATTRIBUTION"),
+    );
+  }
+  for (const surface of ["孩子说", "我的孩子说", "据子女回忆", "家人提起"]) {
+    assert.deepEqual(
+      paragraphProblems(
+        {
+          text: surface + "，家里用煤油灯照明。",
+          factRefs: [fact.id],
+          attributions: [{ factRef: fact.id, surface }],
+        },
+        [fact],
+      ),
+      [],
+    );
+  }
+});
