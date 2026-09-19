@@ -306,6 +306,17 @@ test("paragraph repair leaves successful paragraphs intact; optional-only failur
               .filter((f: FactAtom) => f.attribution.required)
               .map((f: FactAtom) => ({ factRef: f.id, surface: "家人说" })),
           };
+          if (input.repair)
+            out = {
+              edits: [
+                {
+                  span: input.repair.editableSpans[0],
+                  replacement: input.repair.editableSpans[0],
+                },
+              ],
+              append: "",
+              attributions: out.attributions,
+            };
         } else if (input.task) {
           out = {
             complete: true,
@@ -457,6 +468,127 @@ test("a year supported elsewhere in the paragraph cannot date an unknown-time at
   assert.ok(
     paragraphProblems(p, [facts[0]!, dated], r).includes(
       "UNSUPPORTED_TEMPORAL_CLAIM",
+    ),
+  );
+});
+
+test("six-fact narrative regression permits two natural multi-fact paragraphs without Persona changing policy", () => {
+  const six = [
+    f("F001", "我在村里出生。"),
+    f("F002", "家里有四个孩子。"),
+    f("F003", "我排行第二。"),
+    f("F004", "我到县城读书。"),
+    f("F005", "王老师教语文。"),
+    f("F006", "王老师叫我们先把字写端正。"),
+  ];
+  const plan = parseNarrativePlan(
+    JSON.stringify({
+      chapters: [
+        {
+          title: "家里和学校",
+          titleMode: "thematic",
+          titleFactRefs: [],
+          paragraphs: [
+            { brief: "家庭", factRefs: ["F001", "F002", "F003"] },
+            { brief: "学校", factRefs: ["F004", "F005", "F006"] },
+          ],
+        },
+      ],
+      omissions: [],
+    }),
+    six,
+  );
+  const paragraphs = [
+    "我在村里出生，家里有四个孩子，我排行第二。",
+    "我到县城读书，教语文的王老师叫我们先把字写端正。",
+  ].map((text, i) =>
+    parseParagraph(
+      JSON.stringify({
+        text,
+        factRefs: plan.chapters[0]!.paragraphs[i]!.factRefs,
+        attributions: [],
+      }),
+      plan.chapters[0]!.paragraphs[i]!,
+    ),
+  );
+  const section = publishChapter(plan.chapters[0]!, paragraphs, six);
+  assert.equal(section.nodeRefs.length, 6);
+  assert.equal(section.paragraphs!.length, 2);
+  assert.ok(section.paragraphs!.every((p) => p.factRefs.length === 3));
+  assert.doesNotMatch(section.text, /年份不详|待确认/);
+});
+
+test("targeted repair cannot move supported family attribution while removing a rejected flourish", async () => {
+  const { repairContract, parseParagraphRepair } = await import(
+    "../src/derived/narrative-repair.ts"
+  );
+  const p = {
+    text: "据孩子说，家里用煤油灯照明。邻居们在门口聊天，交往带着自然的亲近。",
+    factRefs: ["F001", "F002"],
+    attributions: [{ factRef: "F001", surface: "据孩子说" }],
+  };
+  const claims = [
+    {
+      span: "据孩子说",
+      claim: "子女讲述",
+      kind: "attribution",
+      status: "supported",
+      supportedBy: ["F001"],
+    },
+    {
+      span: "家里用煤油灯照明",
+      claim: "灯",
+      kind: "factual",
+      status: "supported",
+      supportedBy: ["F001"],
+    },
+    {
+      span: "邻居们在门口聊天",
+      claim: "聊天",
+      kind: "factual",
+      status: "supported",
+      supportedBy: ["F002"],
+    },
+    {
+      span: "交往带着自然的亲近",
+      claim: "亲近",
+      kind: "mental_state",
+      status: "unsupported",
+      supportedBy: [],
+    },
+  ];
+  const review = parseReview(
+    JSON.stringify({ complete: true, claims, problems: [] }),
+    p.factRefs,
+    p.text,
+  );
+  const contract = repairContract(p, review, facts, [
+    "UNSUPPORTED_MENTAL_STATE_CLAIM",
+  ]);
+  const repaired = parseParagraphRepair(
+    JSON.stringify({
+      edits: [{ span: "，交往带着自然的亲近", replacement: "" }],
+      append: "",
+      attributions: p.attributions,
+    }),
+    { brief: "生活", factRefs: p.factRefs },
+    contract,
+  );
+  assert.equal(repaired.text, "据孩子说，家里用煤油灯照明。邻居们在门口聊天。");
+  assert.throws(() =>
+    parseParagraphRepair(
+      JSON.stringify({
+        edits: [
+          {
+            span: p.text,
+            replacement: "家里用煤油灯照明。据孩子说，邻居们在门口聊天。",
+          },
+        ],
+        append: "",
+        attributions: p.attributions,
+      }),
+      { brief: "生活", factRefs: p.factRefs },
+      contract,
     ),
   );
 });

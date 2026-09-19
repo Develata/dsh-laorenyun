@@ -1,3 +1,8 @@
+import {
+  repairContract,
+  parseParagraphRepair,
+  TARGETED_REPAIR_PROMPT,
+} from "./narrative-repair.ts";
 import type { InternalModel } from "../memory/model.ts";
 import type { Generation, Biography } from "./types.ts";
 import { DomainError } from "../domain/types.ts";
@@ -14,7 +19,6 @@ import {
   text,
   NARRATIVE_PLAN_PROMPT,
   NARRATIVE_WRITE_PROMPT,
-  NARRATIVE_REPAIR_PROMPT,
   NARRATIVE_REVIEW_PROMPT,
   TITLE_REPAIR_PROMPT,
   type NarrativeParagraph,
@@ -108,7 +112,7 @@ export async function generateNarrative(
     const paragraphs: NarrativeParagraph[] = [];
     for (const [index, brief] of chapter.paragraphs.entries()) {
       const allowed = facts.filter((f) => brief.factRefs.includes(f.id));
-      let repair: unknown = null;
+      let repair: ReturnType<typeof repairContract> | null = null;
       let accepted = false;
       try {
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -116,15 +120,18 @@ export async function generateNarrative(
             `chapter:${g.candidates.length + 1}/${plan.chapters.length}`,
           );
           const p = await call(
-            attempt ? NARRATIVE_REPAIR_PROMPT : NARRATIVE_WRITE_PROMPT,
+            attempt ? TARGETED_REPAIR_PROMPT : NARRATIVE_WRITE_PROMPT,
             {
               title,
               brief,
               facts: material(allowed),
               style: styleSlot(g.manifest.persona),
-              ...(repair ? { repair } : {}),
+              ...(repair ? { repair, allowedFacts: material(allowed) } : {}),
             },
-            (raw) => parseParagraph(raw, brief),
+            (raw) =>
+              repair
+                ? parseParagraphRepair(raw, brief, repair)
+                : parseParagraph(raw, brief),
           );
           const r = await review(p.text, allowed, "paragraph");
           const issues = paragraphProblems(p, allowed, r);
@@ -154,24 +161,7 @@ export async function generateNarrative(
             accepted = true;
             break;
           }
-          const covered = new Set(
-            r.claims
-              .filter(
-                (c) =>
-                  ["supported", "compatible_paraphrase"].includes(c.status) &&
-                  c.kind !== "attribution",
-              )
-              .flatMap((c) => c.supportedBy),
-          );
-          repair = {
-            originalParagraph: p,
-            unsupportedClaims: r.claims.filter((c) =>
-              ["unsupported", "contradicted"].includes(c.status),
-            ),
-            missingFactRefs: brief.factRefs.filter((id) => !covered.has(id)),
-            issues,
-            reviewProblems: r.problems,
-          };
+          repair = repairContract(p, r, allowed, issues);
         }
       } catch (error) {
         // InternalModel already exhausted its single format repair. Only legally

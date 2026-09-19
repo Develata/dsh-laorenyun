@@ -719,13 +719,22 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
             problems: [],
           };
         } else if (input.brief) {
-          raw = {
-            text: input.repair
-              ? "1978年，我来到合肥读书。"
-              : "1978年，我在合肥读书，住在学校宿舍。",
-            factRefs: ["F001"],
-            attributions: [],
-          };
+          raw = input.repair
+            ? {
+                edits: [
+                  {
+                    span: input.repair.editableSpans[0],
+                    replacement: "1978年，我来到合肥读书。",
+                  },
+                ],
+                append: "",
+                attributions: [],
+              }
+            : {
+                text: "1978年，我在合肥读书，住在学校宿舍。",
+                factRefs: ["F001"],
+                attributions: [],
+              };
         } else
           raw = {
             chapters: [

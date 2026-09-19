@@ -312,3 +312,5 @@ Phase5 HTTP边界：普通JSON请求streaming读取≤80,000 bytes/10秒、解�
 具体schema以`src/derived/narrative.ts`为准。每个FactAtom都被使用或以Host验证的闭合原因省略；unknown-time本人事实仍必需，未解冲突排除，未绑定身份的家人关系可省略。thematic标题可不含事实引用，仍由已验证章节材料审校；factual标题必须有引用。每段原子span必须出现在正文，支持ID只能来自该段；supported/compatible_paraphrase必须有支持，nonfactual只允许narrative_glue。每个使用事实必须被实际支持的内容命题覆盖，不能用attribution命题冒充事实表达。
 
 标题与段落各自最多一次语义修复；所有调用共用原生成截止。已通过段落不重写；仅可省略事实组成的失败段落可退出正文并记录原因。JSON导出包含FactAtom映射和omissions，段落factRefs仍能解析到节点修订及源证言；省略元数据不插入正文。
+
+RC2定向修复返回`edits[{span,replacement}]`、受限`append`及最终attributions；span必须唯一且属于软件列出的可编辑区，编辑不可重叠，支持片段不能消失或换序。标题仍单独处理。补丁不是免审：应用补丁后重新进行相同原子/时间/归属/覆盖验证，最多一次语义修复。
