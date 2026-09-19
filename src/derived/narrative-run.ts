@@ -37,7 +37,11 @@ export async function generateNarrative(
   // Retain old testimony in the fixed manifest/provenance, not as active competing
   // facts in Writer/Verifier context after an explicit source-backed resolution.
   const material = (selected: FactAtom[]) =>
-    selected.map(({ historyRefs: _history, ...support }) => support);
+    selected.map(({ historyRefs: _history, ...support }) =>
+      support.conflictPolicy === "resolved"
+        ? { ...support, testimony: [], clarifications: undefined }
+        : support,
+    );
   const call = async <T>(
     prompt: string,
     input: unknown,
