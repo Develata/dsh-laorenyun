@@ -1,5 +1,4 @@
 import { StoryForest } from "./story-trees.tsx";
-import { storyTrees } from "../river/trees.ts";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { RiverSnapshot } from "../river/types.ts";
 import { anchors, arcPosition, timeLabel } from "../river/layout.ts";
@@ -25,6 +24,7 @@ export function Journey({
   // Never join coordinates from the previous revision/filter to a new node array.
   const layout = projection?.input === data ? projection.points : [];
   const [extent, setExtent] = useState(0);
+  const [groveExtent, setGroveExtent] = useState(360);
   const [cluster, setCluster] = useState<string[] | null>(null);
   const [list, setList] = useState(false),
     [decade, setDecade] = useState<number | null>(null);
@@ -249,6 +249,7 @@ export function Journey({
                   max={max}
                   width={width}
                   onSelect={onSelect}
+                  onExtent={setExtent}
                 />
               )}
             </svg>
@@ -266,10 +267,7 @@ export function Journey({
           <svg
             className="ly-grove"
             width={width}
-            height={Math.max(
-              360,
-              storyTrees(data).filter((t) => t.drifting).length * 900,
-            )}
+            height={Math.max(360, groveExtent)}
             role="group"
             aria-label="漂流湾故事群"
           >
@@ -284,6 +282,7 @@ export function Journey({
               width={width}
               onSelect={onSelect}
               drifting
+              onExtent={setGroveExtent}
             />
           </svg>
         )}

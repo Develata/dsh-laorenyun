@@ -38,17 +38,18 @@ export function StoryForest({
   const nodes = new Map<string, (typeof data.nodes)[number]>(
     data.nodes.map((n) => [n.id, n]),
   );
+  let groveTop = 120;
   const layouts = trees.map((t, i) => {
     const localPath: ArcPath = drifting
       ? {
           getTotalLength: () => 500,
           getPointAtLength: (s) => ({
             x: width < 520 ? 32 : width / 2,
-            y: 120 + i * 900 + (s - 250),
+            y: groveTop + (s - 250),
           }),
         }
       : path;
-    return {
+    const layout = {
       tree: t,
       ...treeGeometry(
         t,
@@ -60,6 +61,11 @@ export function StoryForest({
         i % 2 ? 1 : -1,
       ),
     };
+    if (drifting) {
+      const visible = expanded === t.id ? layout.points : [layout.points[0]!];
+      groveTop = Math.max(...visible.map((p) => p.y)) + 180;
+    }
+    return layout;
   });
   useEffect(() => {
     onExtent?.(
