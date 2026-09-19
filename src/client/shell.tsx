@@ -280,6 +280,15 @@ export async function installShell(
               段来源
             </p>
             <button
+              style={{
+                font: "inherit",
+                minHeight: 44,
+                padding: "8px 12px",
+                background: "transparent",
+                color: "inherit",
+                border: "1px solid #93a28a",
+                marginBottom: 12,
+              }}
               onClick={() =>
                 memoryPreview.show(preview.node, preview.branchCount, true)
               }
