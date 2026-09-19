@@ -7,6 +7,12 @@ export interface ModelEvidence {
   model: string;
   latencyMs: number;
   repairs: number;
+  attempts?: Array<{
+    attempt: number;
+    latencyMs: number;
+    outcome: "success" | "format" | "failed" | "timeout";
+  }>;
+  timeoutStage?: "admission" | "attempt" | "outer";
 }
 export class InternalModel {
   private active = 0;
@@ -40,8 +46,10 @@ export class InternalModel {
     this.waiting.shift()?.();
   }
   private llm: Pick<LlmRuntime, "stream">;
-  constructor(llm: Pick<LlmRuntime, "stream">) {
+  private attemptTimeoutMs: number;
+  constructor(llm: Pick<LlmRuntime, "stream">, attemptTimeoutMs = 60000) {
     this.llm = llm;
+    this.attemptTimeoutMs = attemptTimeoutMs;
   }
   async json<T>(
     route: ModelRoute,
@@ -51,11 +59,37 @@ export class InternalModel {
     signal: AbortSignal,
   ): Promise<{ value: T; evidence: ModelEvidence }> {
     const start = Date.now();
-    const bounded = AbortSignal.any([signal, AbortSignal.timeout(60000)]);
-    await this.acquire(bounded);
+    const evidence: ModelEvidence = {
+      model: route.model,
+      latencyMs: 0,
+      repairs: 0,
+      attempts: [],
+    };
+    try {
+      await this.acquire(
+        AbortSignal.any([signal, AbortSignal.timeout(this.attemptTimeoutMs)]),
+      );
+    } catch (error) {
+      evidence.timeoutStage = signal.aborted ? "outer" : "admission";
+      if (error instanceof Error) Object.assign(error, { evidence });
+      throw error;
+    }
     try {
       let repair = false;
       for (let attempt = 0; attempt < 2; attempt++) {
+        signal.throwIfAborted();
+        const bounded = AbortSignal.any([
+          signal,
+          AbortSignal.timeout(this.attemptTimeoutMs),
+        ]);
+        const attemptStart = Date.now();
+        const record = {
+          attempt: attempt + 1,
+          latencyMs: 0,
+          outcome: "failed" as "success" | "format" | "failed" | "timeout",
+        };
+        evidence.attempts!.push(record);
+        evidence.repairs = attempt;
         let text = "";
         const work = async () => {
           for await (const chunk of this.llm.stream({
@@ -104,24 +138,32 @@ export class InternalModel {
               if (bounded.aborted) abort();
             }),
           ]);
+        } catch (error) {
+          if (bounded.aborted) {
+            record.outcome = "timeout";
+            evidence.timeoutStage = signal.aborted ? "outer" : "attempt";
+          }
+          throw error;
         } finally {
+          record.latencyMs = Date.now() - attemptStart;
           bounded.removeEventListener("abort", abort);
         }
         try {
-          return {
-            value: parse(text),
-            evidence: {
-              model: route.model,
-              latencyMs: Date.now() - start,
-              repairs: attempt,
-            },
-          };
+          const value = parse(text);
+          record.outcome = "success";
+          evidence.latencyMs = Date.now() - start;
+          return { value, evidence };
         } catch (e) {
+          record.outcome = "format";
           if (attempt === 1) throw e;
           repair = true;
         }
       }
       throw new DomainError("MODEL_FORMAT", "no result");
+    } catch (error) {
+      evidence.latencyMs = Date.now() - start;
+      if (error instanceof Error) Object.assign(error, { evidence });
+      throw error;
     } finally {
       this.release();
     }

@@ -8,6 +8,7 @@ import type { Generation, Biography } from "./types.ts";
 import { DomainError } from "../domain/types.ts";
 import {
   factManifest,
+  sentenceUnits,
   parseNarrativePlan,
   parseParagraph,
   parseReview,
@@ -51,48 +52,57 @@ export async function generateNarrative(
     // InternalModel serializes input for each of its at-most-two format attempts.
     // Keep feedback local to this task; facts and the fixed manifest never change.
     const taskInput = { ...(input as Record<string, unknown>) };
-    const r = await model.json(
-      g.route,
-      prompt,
-      taskInput,
-      (raw) => {
-        try {
-          return parse(raw);
-        } catch (error) {
-          g.validationReason =
-            error instanceof DomainError
-              ? error.code + ":" + error.message
-              : "NARRATIVE_FORMAT";
-          taskInput.formatRepair = {
-            reason: g.validationReason.slice(0, 300),
-            previousOutput: raw.slice(0, 48000),
-            instruction:
-              "只纠正上述格式/引用错误；span必须逐字取自输入text，保留标点；不重写原文，不改变事实判断来绕过格式校验。",
-          };
+    let r;
+    try {
+      r = await model.json(
+        g.route,
+        prompt,
+        taskInput,
+        (raw) => {
           try {
-            const rejected = JSON.parse(raw);
-            g.rejectedStructure = {
-              keys: Object.keys(rejected).slice(0, 12),
-              chapters: Array.isArray(rejected.chapters)
-                ? rejected.chapters.slice(0, 20).map((c: any) => ({
-                    keys: Object.keys(c),
-                    titleFactRefs: c.titleFactRefs,
-                    paragraphs: c.paragraphs?.map((p: any) => ({
-                      keys: Object.keys(p),
-                      factRefs: p.factRefs,
-                    })),
-                  }))
-                : undefined,
-              omissions: rejected.omissions,
+            return parse(raw);
+          } catch (error) {
+            g.validationReason =
+              error instanceof DomainError
+                ? error.code + ":" + error.message
+                : "NARRATIVE_FORMAT";
+            taskInput.formatRepair = {
+              reason: g.validationReason.slice(0, 300),
+              previousOutput: raw.slice(0, 48000),
+              instruction:
+                "只纠正上述格式/引用错误；sentenceId必须来自输入sentences；不重写原文，不改变事实判断来绕过格式校验。",
             };
-          } catch {
-            /* No free text/hidden reasoning retained. */
+            try {
+              const rejected = JSON.parse(raw);
+              g.rejectedStructure = {
+                keys: Object.keys(rejected).slice(0, 12),
+                chapters: Array.isArray(rejected.chapters)
+                  ? rejected.chapters.slice(0, 20).map((c: any) => ({
+                      keys: Object.keys(c),
+                      titleFactRefs: c.titleFactRefs,
+                      paragraphs: c.paragraphs?.map((p: any) => ({
+                        keys: Object.keys(p),
+                        factRefs: p.factRefs,
+                      })),
+                    }))
+                  : undefined,
+                omissions: rejected.omissions,
+              };
+            } catch {
+              /* No free text/hidden reasoning retained. */
+            }
+            throw error;
           }
-          throw error;
-        }
-      },
-      signal,
-    );
+        },
+        signal,
+      );
+    } catch (error) {
+      const evidence = (
+        error as { evidence?: import("../memory/model.ts").ModelEvidence }
+      ).evidence;
+      if (evidence) g.evidence.push(evidence);
+      throw error;
+    }
     g.evidence.push(r.evidence);
     return r.value;
   };
@@ -108,7 +118,7 @@ export async function generateNarrative(
   const review = async (prose: string, allowed: FactAtom[], task: string) =>
     call(
       NARRATIVE_REVIEW_PROMPT,
-      { task, text: prose, facts: material(allowed) },
+      { task, sentences: sentenceUnits(prose), facts: material(allowed) },
       (raw) =>
         parseReview(
           raw,

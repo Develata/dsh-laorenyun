@@ -1,5 +1,6 @@
 import {
   array,
+  sentenceUnits,
   obj,
   text,
   fail,
@@ -17,6 +18,48 @@ export function repairContract(
   facts: FactAtom[],
   issues: string[],
 ) {
+  if (r.claims.some((c) => c.sentenceId)) {
+    const units = sentenceUnits(p.text);
+    const editable = units.filter((s) => {
+      const claims = r.claims.filter((c) => c.sentenceId === s.id);
+      const ids = [...new Set(claims.flatMap((c) => c.supportedBy))];
+      return (
+        !claims.length ||
+        claims.some((c) =>
+          ["unsupported", "contradicted"].includes(c.status),
+        ) ||
+        paragraphProblems(
+          { text: s.text, factRefs: ids, attributions: p.attributions },
+          facts.filter((f) => ids.includes(f.id)),
+          {
+            complete: true,
+            problems: [],
+            claims: claims.map((c) => ({ ...c, sentenceId: "S1" })),
+          },
+        ).length > 0
+      );
+    });
+    return {
+      editableSpans: editable.map((s) => s.text),
+      targets: editable.map((s, i) => ({
+        id: `E${i + 1}`,
+        span: s.text,
+        start: units
+          .slice(0, units.indexOf(s))
+          .reduce((n, x) => n + x.text.length, 0),
+      })),
+      transitionSpans: [] as string[],
+      protectedSpans: units
+        .filter((s) => !editable.includes(s))
+        .map((s) => s.text),
+      allowAppend: issues.includes("FACT_COVERAGE_MISSING"),
+      rejectedClaims: r.claims.filter((c) =>
+        ["unsupported", "contradicted"].includes(c.status),
+      ),
+      originalParagraph: p,
+      issues,
+    };
+  }
   const accepted = r.claims.filter((c) =>
     ["supported", "compatible_paraphrase", "nonfactual"].includes(c.status),
   );
@@ -128,8 +171,12 @@ export function parseParagraphRepair(
       if (typeof e.replacement !== "string" || e.replacement.length > 2400)
         fail("repair replacement bound");
       return {
-        start: p.text.indexOf(span),
-        end: p.text.indexOf(span) + span.length,
+        start:
+          "start" in target! ? (target!.start as number) : p.text.indexOf(span),
+        end:
+          ("start" in target!
+            ? (target!.start as number)
+            : p.text.indexOf(span)) + span.length,
         replacement: e.replacement,
       };
     })

@@ -10,7 +10,8 @@ import {
   factManifest,
   parseNarrativePlan,
   parseParagraph,
-  parseReview,
+  parseReview as parseSentenceReview,
+  sentenceUnits,
   reviewPassed,
   paragraphProblems,
   publishChapter,
@@ -18,6 +19,25 @@ import {
   omissionAllowed,
   type FactAtom,
 } from "../src/derived/narrative.ts";
+// Adapt the historical adversarial corpus to the new wire contract. Impossible
+// old spans deliberately become unknown IDs, never approximate text matches.
+function parseReview(raw: string, allowed: string[], prose: string) {
+  const legacy = JSON.parse(raw);
+  const wire = {
+    ...legacy,
+    claims: legacy.claims.map(({ span, ...c }: any) => ({
+      ...c,
+      sentenceId:
+        sentenceUnits(prose).find((s) => s.text.includes(span))?.id ??
+        "INVALID",
+    })),
+  };
+  parseSentenceReview(JSON.stringify(wire), allowed, prose);
+  // These RC2 persisted-review regression cases keep their historical span
+  // representation. New wire/guard/repair tests below exercise sentence IDs.
+  return legacy as import("../src/derived/narrative.ts").ClaimReview;
+}
+
 const f = (id: string, claim: string): FactAtom => ({
   id,
   claim,
@@ -332,7 +352,9 @@ test("paragraph repair isolates failures; malformed title review falls back with
           out = {
             complete: true,
             claims: input.facts.map((f: FactAtom) => ({
-              span: input.task.startsWith("title:") ? input.text : f.claim,
+              sentenceId: input.sentences.find((s: any) =>
+                s.text.includes(f.claim),
+              )?.id,
               claim: f.claim,
               kind: "factual",
               status: f.id === optional.id ? "unsupported" : "supported",
@@ -947,4 +969,96 @@ test("RC3 correction support excludes superseded testimony while archive history
   } finally {
     await db.close();
   }
+});
+
+test("sentence IDs preserve exact text, repeated sentences and reject absent IDs or incomplete coverage", () => {
+  const prose = "我在河边玩。\n我在河边玩！还有伙伴？";
+  const units = sentenceUnits(prose);
+  assert.equal(units.map((s) => s.text).join(""), prose);
+  const report = {
+    complete: true,
+    problems: [],
+    claims: units
+      .filter((s) => s.text.trim())
+      .map((s) => ({
+        sentenceId: s.id,
+        claim: "转述允许不同标点",
+        kind: "factual",
+        status: "supported",
+        supportedBy: ["F001"],
+      })),
+  };
+  const parsed = parseSentenceReview(JSON.stringify(report), ["F001"], prose);
+  assert.ok(reviewPassed(parsed));
+  assert.equal(parsed.claims[1]!.span, "我在河边玩！");
+  report.claims.pop();
+  assert.equal(
+    parseSentenceReview(JSON.stringify(report), ["F001"], prose).complete,
+    false,
+  );
+  report.claims[0]!.sentenceId = "S999";
+  assert.throws(
+    () => parseSentenceReview(JSON.stringify(report), ["F001"], prose),
+    /sentence ID/,
+  );
+});
+
+test("sentence review guards prevent date borrowing and repair preserves other sentences", async () => {
+  const { repairContract, parseParagraphRepair } = await import(
+    "../src/derived/narrative-repair.ts"
+  );
+  const fs = [f("F1", "小时候我在河边玩。"), f("F2", "邻居聊天。")];
+  const p = {
+    text: "小时候我在河边玩。小时候邻居聊天。",
+    factRefs: ["F1", "F2"],
+  };
+  const r = parseSentenceReview(
+    JSON.stringify({
+      complete: true,
+      problems: [],
+      claims: [
+        {
+          sentenceId: "S1",
+          claim: "童年玩耍",
+          kind: "factual",
+          status: "supported",
+          supportedBy: ["F1"],
+        },
+        {
+          sentenceId: "S2",
+          claim: "童年邻居聊天",
+          kind: "factual",
+          status: "supported",
+          supportedBy: ["F2"],
+        },
+      ],
+    }),
+    p.factRefs,
+    p.text,
+  );
+  const issues = paragraphProblems(p, fs, r);
+  assert.ok(issues.includes("UNSUPPORTED_TEMPORAL_SCOPE"));
+  const contract = repairContract(p, r, fs, issues);
+  assert.ok(contract.protectedSpans.includes("小时候我在河边玩。"));
+  const target = contract.targets.find((t) => t.span === "小时候邻居聊天。")!;
+  const corrected = parseParagraphRepair(
+    JSON.stringify({
+      edits: [{ target: target.id, replacement: "邻居聊天。" }],
+      append: "",
+      attributions: [],
+    }),
+    { brief: "两个故事", factRefs: p.factRefs },
+    contract,
+  );
+  assert.equal(corrected.text, "小时候我在河边玩。邻居聊天。");
+  const next = parseSentenceReview(
+    JSON.stringify({
+      complete: true,
+      problems: [],
+      claims: r.claims.map(({ span, ...c }) => c),
+    }),
+    p.factRefs,
+    corrected.text,
+  );
+  assert.deepEqual(paragraphProblems(corrected, fs, next), []);
 });

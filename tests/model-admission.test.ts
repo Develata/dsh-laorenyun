@@ -39,3 +39,42 @@ test("shared archive model admission bounds concurrency and removes cancelled wa
   await Promise.all([second, fourth]);
   assert.equal(peak, 2);
 });
+
+test("format repair gets a fresh attempt window while outer deadline stays authoritative", async () => {
+  const route = { provider: "fixture", model: "fixture" };
+  const signals: AbortSignal[] = [];
+  let calls = 0;
+  const model = new InternalModel(
+    {
+      async *stream(input: any) {
+        signals.push(input.signal);
+        const n = ++calls;
+        await new Promise((r) => setTimeout(r, 70));
+        yield { type: "text-delta", text: n % 2 ? "invalid" : "{}" };
+      },
+    } as never,
+    110,
+  );
+  const result = await model.json(
+    route,
+    "test",
+    {},
+    JSON.parse,
+    AbortSignal.timeout(1000),
+  );
+  assert.equal(result.evidence.repairs, 1);
+  assert.notEqual(signals[0], signals[1]);
+  assert.deepEqual(
+    result.evidence.attempts!.map((a) => a.outcome),
+    ["format", "success"],
+  );
+  assert.ok(result.evidence.latencyMs >= 140);
+  await assert.rejects(
+    model.json(route, "test", {}, JSON.parse, AbortSignal.timeout(100)),
+    (e: any) => {
+      assert.equal(e.evidence.timeoutStage, "outer");
+      assert.equal(e.evidence.attempts[1].outcome, "timeout");
+      return true;
+    },
+  );
+});

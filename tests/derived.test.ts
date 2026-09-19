@@ -709,7 +709,7 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
             complete: true,
             claims: [
               {
-                span: input.text,
+                sentenceId: input.sentences[0].id,
                 claim: "合成原子审校",
                 kind: "factual",
                 supportedBy: supported ? ["F001"] : [],
@@ -755,16 +755,19 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
             ...raw,
             claims: raw.claims!.map((c: any) => ({
               ...c,
-              span: "不在输入里的片段",
+              sentenceId: "S999",
             })),
           };
-          assert.throws(() => parse(JSON.stringify(invalid)), /span absent/);
-          assert.match(input.formatRepair.reason, /span absent/);
+          assert.throws(() => parse(JSON.stringify(invalid)), /sentence ID/);
+          assert.match(input.formatRepair.reason, /sentence ID/);
           assert.equal(
             input.formatRepair.previousOutput,
             JSON.stringify(invalid),
           );
-          assert.equal(input.text.includes("不在输入里的片段"), false);
+          assert.equal(
+            input.sentences.some((s: any) => s.id === "S999"),
+            false,
+          );
         }
         return {
           value: parse(JSON.stringify(raw)),
