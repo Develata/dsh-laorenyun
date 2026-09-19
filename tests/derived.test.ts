@@ -750,6 +750,22 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
             ],
             omissions: [],
           };
+        if (input.task === "paragraph" && reviews === 1) {
+          const invalid = {
+            ...raw,
+            claims: raw.claims!.map((c: any) => ({
+              ...c,
+              span: "不在输入里的片段",
+            })),
+          };
+          assert.throws(() => parse(JSON.stringify(invalid)), /span absent/);
+          assert.match(input.formatRepair.reason, /span absent/);
+          assert.equal(
+            input.formatRepair.previousOutput,
+            JSON.stringify(invalid),
+          );
+          assert.equal(input.text.includes("不在输入里的片段"), false);
+        }
         return {
           value: parse(JSON.stringify(raw)),
           evidence: { model: "fixture", latencyMs: 1, repairs: 0 },

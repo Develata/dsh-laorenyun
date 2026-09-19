@@ -48,10 +48,13 @@ export async function generateNarrative(
     parse: (raw: string) => T,
   ) => {
     signal.throwIfAborted();
+    // InternalModel serializes input for each of its at-most-two format attempts.
+    // Keep feedback local to this task; facts and the fixed manifest never change.
+    const taskInput = { ...(input as Record<string, unknown>) };
     const r = await model.json(
       g.route,
       prompt,
-      input,
+      taskInput,
       (raw) => {
         try {
           return parse(raw);
@@ -60,6 +63,12 @@ export async function generateNarrative(
             error instanceof DomainError
               ? error.code + ":" + error.message
               : "NARRATIVE_FORMAT";
+          taskInput.formatRepair = {
+            reason: g.validationReason.slice(0, 300),
+            previousOutput: raw.slice(0, 48000),
+            instruction:
+              "只纠正上述格式/引用错误；span必须逐字取自输入text，保留标点；不重写原文，不改变事实判断来绕过格式校验。",
+          };
           try {
             const rejected = JSON.parse(raw);
             g.rejectedStructure = {
