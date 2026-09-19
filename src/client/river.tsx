@@ -132,8 +132,10 @@ export function MemoryRiver({
   useEffect(() => {
     const open = () => {
       const p = memoryPreview.getSnapshot();
-      if (p?.full && p.archive === archiveSelection.getSnapshot())
+      if (p?.full && p.archive === archiveSelection.getSnapshot()) {
         void select(p.node.id);
+        memoryPreview.clear();
+      }
     };
     open();
     return memoryPreview.subscribe(open);

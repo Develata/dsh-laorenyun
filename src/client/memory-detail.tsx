@@ -123,6 +123,27 @@ export function MemoryDetail({
             </div>
           </div>
         )}
+        {!!detail.related?.length && (
+          <section>
+            <h3>相关故事</h3>
+            {detail.related.map((n, i) => (
+              <p key={n.id + String(i)}>
+                <small>
+                  {{
+                    ELABORATES: "故事的展开",
+                    PRECEDES: "先后关系",
+                    CAUSES: "讲述中的因果",
+                    RELATES_TO: "相关记忆",
+                  }[n.kind] ?? "相关故事"}{" "}
+                  ·{" "}
+                </small>
+                <button onClick={() => void select(n.id)}>
+                  {n.keySentence}
+                </button>
+              </p>
+            ))}
+          </section>
+        )}
         <h3>查看来源</h3>
         {detail.sources.map((s) => (
           <div key={s.transcript.id}>

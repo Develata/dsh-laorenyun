@@ -1,6 +1,9 @@
 import type { GraphNode, Conflict } from "../memory/types.ts";
 import type { TranscriptSegment, Media } from "../domain/types.ts";
-export type RiverNode = { hasOpenConflict?: boolean } & Pick<
+export type RiverNode = {
+  hasOpenConflict?: boolean;
+  sourceCount?: number;
+} & Pick<
   GraphNode,
   "id" | "revision" | "keySentence" | "time" | "placement" | "status"
 >;
@@ -21,6 +24,7 @@ export interface RiverSnapshot {
   relations: { from: string; to: string; kind: string }[];
 }
 export interface MemoryDetail {
+  related?: { id: string; keySentence: string; kind: string }[];
   graphRevision: number;
   node: GraphNode;
   people: string[];

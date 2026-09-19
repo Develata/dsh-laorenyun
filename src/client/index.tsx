@@ -156,8 +156,7 @@ export async function apply(ctx: Context): Promise<void> {
   });
   const openRiver = () =>
     ctx.layout.selectPanel("laorenyun-river" as MainPanelId);
-  const openInterview = () =>
-    ctx.layout.selectPanel("conversation" as MainPanelId);
+  const openInterview = () => ctx.layout.selectPanel(null);
   let awaitingFirstPlayback: string | null = null;
   function River({ mode = "river" }: { mode?: "river" | "biography" }) {
     const activeArchive = useSyncExternalStore(

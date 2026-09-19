@@ -276,7 +276,8 @@ export async function installShell(
             <h3>{preview.node.keySentence}</h3>
             <p>
               {preview.node.time.originalText || "年月未定"} ·{" "}
-              {preview.branchCount} 个相关故事
+              {preview.branchCount} 个相关故事 · {preview.node.sourceCount ?? 0}{" "}
+              段来源
             </p>
             <button
               onClick={() =>
@@ -413,27 +414,34 @@ export async function installShell(
       Preview,
     ),
   );
+  function PreviewAction() {
+    // The pinned shell's sidebar selects the named conversation panel, while
+    // its session rightbar is mounted only for the canonical null selection.
+    // Normalize through the public layout API once this conversation UI mounts.
+    useEffect(() => ctx.layout.selectPanel(null), []);
+    return (
+      <button
+        style={{
+          font: "inherit",
+          minHeight: 44,
+          padding: "8px 12px",
+          background: "transparent",
+          color: "inherit",
+          border: "1px solid #93a28a",
+        }}
+        onClick={() => ctx.sidebarRight.openTab("laorenyun-river-preview")}
+      >
+        长河导航
+      </button>
+    );
+  }
   ctx.slots.inject("conversation.session.header.utilities", () =>
     ctx.slots.register(
       {
         name: "conversation.session.header.utilities",
         id: "laorenyun-preview",
       },
-      () => (
-        <button
-          style={{
-            font: "inherit",
-            minHeight: 44,
-            padding: "8px 12px",
-            background: "transparent",
-            color: "inherit",
-            border: "1px solid #93a28a",
-          }}
-          onClick={() => ctx.sidebarRight.openTab("laorenyun-river-preview")}
-        >
-          长河导航
-        </button>
-      ),
+      PreviewAction,
     ),
   );
   return { newInterview, getArchive: () => selected };

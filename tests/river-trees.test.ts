@@ -93,3 +93,22 @@ test("normal depth and tangent siblings preserve time anchor and viewport bounds
     assert.equal(s.nodes[0]!.time.start, 24000);
   }
 });
+
+test("BranchMemo groups are visual-only and large trees expose bounded continuation", () => {
+  const s = snapshot([]);
+  s.storyGroups = [{ nodeIds: ["a", "b"] }];
+  const group = storyTrees(s).find((t) => t.kind === "branch")!;
+  assert.deepEqual(
+    group.members.map((m) => m.id),
+    ["a", "b"],
+  );
+  assert.ok(group.members.every((m) => m.parent === null));
+  assert.equal(s.relations.length, 0);
+  s.nodes = Array.from({ length: 30 }, (_, i) => node(String(i)));
+  s.relations = s.nodes
+    .slice(1)
+    .map((n) => ({ from: n.id, to: "0", kind: "ELABORATES" }));
+  const tree = storyTrees(s)[0]!;
+  assert.equal(tree.members.length, 8);
+  assert.equal(tree.hidden.length, 22);
+});

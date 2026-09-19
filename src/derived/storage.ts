@@ -370,8 +370,8 @@ export class PresentationStorage {
     const total = Number(
       this.db.prepare("SELECT count(*) n " + base).get(...args)!.n,
     );
-    const all = this.rows<GraphNode>(
-      "SELECT json_object('id',r.id,'revision',r.revision,'keySentence',json_extract(r.json,'$.keySentence'),'time',json_extract(r.json,'$.time'),'placement',json_extract(r.json,'$.placement'),'status',COALESCE(json_extract(r.json,'$.status'),'confirmed')) json " +
+    const all = this.rows<GraphNode & { sourceCount: number }>(
+      "SELECT json_object('id',r.id,'revision',r.revision,'keySentence',json_extract(r.json,'$.keySentence'),'sourceCount',(SELECT COUNT(DISTINCT transcript_id) FROM source_refs s WHERE s.node_id=r.id AND s.revision=r.revision),'time',json_extract(r.json,'$.time'),'placement',json_extract(r.json,'$.placement'),'status',COALESCE(json_extract(r.json,'$.status'),'confirmed')) json " +
         base +
         " ORDER BY json_extract(r.json,'$.time.start'),r.id LIMIT 500 OFFSET ?",
       ...args,
@@ -419,6 +419,7 @@ export class PresentationStorage {
         placement: n.placement,
         status: n.status ?? "confirmed",
         hasOpenConflict: openConflictNodes.has(n.id),
+        sourceCount: n.sourceCount,
       })),
       total,
       offset,
@@ -435,8 +436,28 @@ export class PresentationStorage {
       id,
       node.revision,
     );
+    const related = this.db
+      .prepare(
+        "SELECT from_id,to_id,kind FROM memory_edges WHERE from_id=? OR to_id=? ORDER BY id LIMIT 12",
+      )
+      .all(id, id)
+      .flatMap((e) => {
+        const other = this.graph.node(
+          String(e.from_id === id ? e.to_id : e.from_id),
+        );
+        return other
+          ? [
+              {
+                id: other.id,
+                keySentence: other.keySentence,
+                kind: String(e.kind),
+              },
+            ]
+          : [];
+      });
     return {
       graphRevision: this.graph.revision(),
+      related,
       node,
       people: (node.people ?? []).map((id) =>
         String(

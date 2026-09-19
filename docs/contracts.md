@@ -304,17 +304,19 @@ Phase5 HTTP边界：普通JSON请求streaming读取≤80,000 bytes/10秒、解�
 
 `narrative-v2` 固定 manifest → FactAtoms → 章节/段落 briefs → 自由 Writer → 独立逐项事实审校。每段 factRefs 非空且在计划范围，Verifier 必须覆盖所有段落/章名；不支持事实拒绝并最多一次语义修复。不能用 Persona 补充事实，未知时间不自动成为 prose。旧 phase4-v1 结果和导出保持可读，历史兼容验证器不用于新的生产生成。
 
-模型内部任务跨档案共享最多2并发、32等待位置；入队时间也计入60秒调用期限；无工具、一次格式修复，总生成截止不重置。失败记录固定校验原因，不存入日志原始模型文本。
+模型内部任务跨档案共享最多2并发、32等待位置；入队单独限60秒；每次模型尝试各限60秒，并受外层generation截止约束；无工具、一次格式修复，总生成截止不重置。失败记录固定校验原因，不存入日志原始模型文本。
 
 
 ### RC2 段落契约
 
-具体schema以`src/derived/narrative.ts`为准。每个FactAtom都被使用或以Host验证的闭合原因省略；unknown-time本人事实仍必需，未解冲突排除，未绑定身份的家人关系可省略。thematic标题可不含事实引用，仍由已验证章节材料审校；factual标题必须有引用。每段原子span必须出现在正文，支持ID只能来自该段；supported/compatible_paraphrase必须有支持，nonfactual只允许narrative_glue。每个使用事实必须被实际支持的内容命题覆盖，不能用attribution命题冒充事实表达。
+具体schema以`src/derived/narrative.ts`为准。每个FactAtom都被使用或以Host验证的闭合原因省略；unknown-time本人事实仍必需，未解冲突排除，未绑定身份的家人关系可省略。thematic标题可不含事实引用，仍由已验证章节材料审校；factual标题必须有引用。RC4每段原子命题引用Host无损分句的sentenceId，编号必须存在且全部句子须被审校，支持ID只能来自该段；supported/compatible_paraphrase必须有支持，nonfactual只允许narrative_glue。每个使用事实必须被实际支持的内容命题覆盖，不能用attribution命题冒充事实表达。
 
 标题与段落各自最多一次语义修复；所有调用共用原生成截止。已通过段落不重写；仅可省略事实组成的失败段落可退出正文并记录原因。JSON导出包含FactAtom映射和omissions，段落factRefs仍能解析到节点修订及源证言；省略元数据不插入正文。
 
-RC2定向修复返回`edits[{span,replacement}]`、受限`append`及最终attributions；span必须唯一且属于软件列出的可编辑区，编辑不可重叠，支持片段不能消失或换序。标题仍单独处理。补丁不是免审：应用补丁后重新进行相同原子/时间/归属/覆盖验证，最多一次语义修复。
+定向修复返回稳定E编号的`edits[{id,replacement}]`、受限`append`及最终attributions；span必须唯一且属于软件列出的可编辑区，编辑不可重叠，支持片段不能消失或换序。标题仍单独处理。补丁不是免审：应用补丁后重新进行相同原子/时间/归属/覆盖验证，最多一次语义修复。
 
 ## RC3 自传出处投影
 
 FactAtom.sourceRefs/testimony 是当前叙事支持；historyRefs 若存在是包括继承证言的历史集合。同节点更正根据 resolved Conflict 修订边界排除旧支持，图数据本身不变。Section引用当前支持；Markdown/HTML仅输出已引用来源，memories.json保留固定完整历史。旧生成不静默改写。实测状态见[v0.2](v0.2.md)。
+
+RC4修复以问题句为可编辑边界，其他已支持句保持原文；模型不再重复抄写审校span。Host由sentenceId恢复确切句文，继续句级时间/归属/覆盖校验。尝试证据仅保存耗时、结果和timeoutStage，不保存隐藏推理。
