@@ -430,6 +430,14 @@ export function paragraphProblems(
         : f.testimony.map((t) => t.text)),
     ])
     .join("\n");
+  // Birthplace and an occasional childhood activity do not establish where a
+  // person grew up. This recurring title failure escaped the model reviewer.
+  // Require explicit life-period evidence for this stronger residence claim.
+  if (
+    /长大|成长|度过.{0,6}童年/u.test(p.text) &&
+    !/长大|成长|度过.{0,6}童年|童年.{0,6}(?:生活|居住)/u.test(source)
+  )
+    problems.push("UNSUPPORTED_CHILDHOOD_RESIDENCE");
   for (const token of temporalTokens(p.text)) {
     const calendar = /年|月|日|号/.test(token);
     const possible = facts.filter(

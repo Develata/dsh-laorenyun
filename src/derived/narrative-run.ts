@@ -267,7 +267,11 @@ export async function generateNarrative(
                   f.conflictPolicy !== "open",
               ),
             ) &&
-            paragraphs.some((p) => p.text.includes(c.span)),
+            paragraphs.some((p) => p.text.includes(c.span)) &&
+            !paragraphProblems(
+              { text: c.span, factRefs: [] },
+              facts.filter((f) => c.supportedBy.includes(f.id)),
+            ).length,
         );
       title = heading?.span ?? `第${g.candidates.length + 1}章`;
       (g.diagnostics ??= []).push({

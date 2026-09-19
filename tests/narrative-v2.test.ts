@@ -592,3 +592,19 @@ test("targeted repair cannot move supported family attribution while removing a 
     ),
   );
 });
+
+test("birthplace and childhood visits cannot become a growth/residence claim even if model approves", () => {
+  const allowed = [
+    f("F001", "我出生在安徽一个村子。"),
+    f("F002", "小时候我常到村边的河里摸小鱼。"),
+  ];
+  const p = { text: "我是在村子里长大的", factRefs: ["F001", "F002"] };
+  assert.ok(
+    paragraphProblems(p, allowed).includes("UNSUPPORTED_CHILDHOOD_RESIDENCE"),
+  );
+  assert.deepEqual(
+    paragraphProblems({ text: "村边的童年往事", factRefs: [] }, allowed),
+    [],
+  );
+  assert.deepEqual(paragraphProblems(p, [f("F001", "我在村子里长大。")]), []);
+});
