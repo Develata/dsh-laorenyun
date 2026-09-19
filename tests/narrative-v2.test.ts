@@ -38,7 +38,7 @@ const f = (id: string, claim: string): FactAtom => ({
 });
 const facts = [
   f("F001", "小时候我在河边玩。"),
-  f("F002", "邻居的孩子也在那里。"),
+  f("F002", "小时候邻居的孩子也在那里。"),
 ];
 const planJSON = (ids: string[]) => ({
   chapters: [
@@ -703,5 +703,39 @@ test("temporal glue repair can split clauses without moving or rewriting their s
       { brief: "不同话题", factRefs: p.factRefs },
       contract,
     ),
+  );
+});
+
+test("atomic approval cannot hide a sentence-level childhood scope borrowed by an undated claim", () => {
+  const fs = [f("F001", "小时候我在河边玩"), f("F002", "邻居们聊天")];
+  const report = parseReview(
+    JSON.stringify({
+      complete: true,
+      problems: [],
+      claims: fs.map((f) => ({
+        span: f.claim,
+        claim: f.claim,
+        kind: "factual",
+        status: "supported",
+        supportedBy: [f.id],
+      })),
+    }),
+    fs.map((f) => f.id),
+    "小时候我在河边玩，邻居们聊天。",
+  );
+  assert.ok(
+    paragraphProblems(
+      { text: "小时候我在河边玩，邻居们聊天。", factRefs: fs.map((f) => f.id) },
+      fs,
+      report,
+    ).includes("UNSUPPORTED_TEMPORAL_SCOPE"),
+  );
+  assert.deepEqual(
+    paragraphProblems(
+      { text: "小时候我在河边玩。邻居们聊天。", factRefs: fs.map((f) => f.id) },
+      fs,
+      report,
+    ),
+    [],
   );
 });
