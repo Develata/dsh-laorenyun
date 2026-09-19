@@ -1,5 +1,6 @@
 import {
   factManifest,
+  attributionProblems,
   parseNarrativePlan,
   parseChapterWriting,
   parseReview,
@@ -177,6 +178,9 @@ export class DerivedService {
             signal,
           );
           g.evidence.push(review.evidence);
+          review.value.problems.push(
+            ...attributionProblems(writing.value.paragraphs, allowed),
+          );
           const reviews = [review.value];
           (g.reviews ??= []).push({
             chapterId: chapter.id,

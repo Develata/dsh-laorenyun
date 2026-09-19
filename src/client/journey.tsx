@@ -227,6 +227,16 @@ export function Journey({
                 className="ly-current ly-current-bank"
                 transform="translate(14 0)"
               />
+              {layout
+                .filter((point) => point.band)
+                .map((point) => (
+                  <path
+                    key={point.id}
+                    d={point.band}
+                    className="ly-interval"
+                    pointerEvents="none"
+                  />
+                ))}
               {clusters.map((group) => {
                 const p = group[0]!;
                 return (
@@ -291,7 +301,6 @@ export function Journey({
                       }
                     }}
                   >
-                    {p.band && <path d={p.band} className="ly-interval" />}
                     <path
                       d={`M ${p.x} ${p.y} Q ${p.x + side * offset * 0.4} ${p.y + 15} ${p.x + side * offset} ${p.y}`}
                       className="ly-stem"

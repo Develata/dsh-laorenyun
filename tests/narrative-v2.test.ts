@@ -164,3 +164,34 @@ test("WHAT manifest is independent of Persona HOW and requires verifiable source
   m.transcripts[0]!.text = "另一句话";
   assert.throws(() => factManifest(m));
 });
+
+test("non-self testimony needs natural attribution even when model review says supported", async () => {
+  const { attributionProblems } = await import("../src/derived/narrative.ts");
+  const facts = [
+    {
+      id: "F001",
+      testimony: [{ speaker: "child", text: "1962年父亲帮家里干活。" }],
+    },
+  ] as import("../src/derived/narrative.ts").FactAtom[];
+  assert.equal(
+    attributionProblems(
+      [{ text: "1962年，父亲帮家里干活。", factRefs: ["F001"] }],
+      facts,
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    attributionProblems(
+      [{ text: "家人后来提起，1962年我曾帮家里干活。", factRefs: ["F001"] }],
+      facts,
+    ),
+    [],
+  );
+  assert.equal(
+    attributionProblems(
+      [{ text: "我记得家里人不少。", factRefs: ["F001"] }],
+      facts,
+    ).length,
+    1,
+  );
+});
