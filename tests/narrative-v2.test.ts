@@ -310,7 +310,7 @@ test("paragraph repair leaves successful paragraphs intact; optional-only failur
           out = {
             complete: true,
             claims: input.facts.map((f: FactAtom) => ({
-              span: input.text,
+              span: input.task.startsWith("title:") ? input.text : f.claim,
               claim: f.claim,
               kind: "factual",
               status: f.id === optional.id ? "unsupported" : "supported",
@@ -353,6 +353,35 @@ test("paragraph repair leaves successful paragraphs intact; optional-only failur
       AbortSignal.timeout(10000),
       async () => {},
     );
+    const { exportDocuments } = await import("../src/derived/export.ts");
+    const docs = exportDocuments({
+      ...g,
+      kind: "export",
+      manifest: { ...g.manifest, biography: result },
+    });
+    const archived = JSON.parse(docs["memories.json"]);
+    const atoms = new Map<string, FactAtom>(
+      archived.biographyManifest.facts.map((f: FactAtom) => [f.id, f]),
+    );
+    for (const section of result.sections)
+      for (const paragraph of section.paragraphs!)
+        for (const ref of paragraph.factRefs) {
+          const atom = atoms.get(ref)!;
+          assert.ok(atom);
+          assert.ok(
+            g.manifest.nodes.some(
+              (n) => `${n.id}@${n.revision}` === atom.nodeRef,
+            ),
+          );
+          assert.ok(
+            atom.sourceRefs.every((id) =>
+              g.manifest.transcripts.some((t) => t.id === id),
+            ),
+          );
+        }
+    assert.deepEqual(archived.biographyManifest.omissions, result.omissions);
+    assert.doesNotMatch(docs["index.html"], /<script|https?:\/\/|@import/);
+    assert.ok(docs["autobiography.md"].includes(result.sections[0]!.text));
     assert.equal(result.chapters.length, 1);
     assert.equal(writes[optional.id], 2);
     assert.ok(required.every((f) => writes[f.id] === 1));
@@ -369,4 +398,65 @@ test("paragraph repair leaves successful paragraphs intact; optional-only failur
   } finally {
     await db.close();
   }
+});
+
+test("pure thematic title may have no factual refs; factual title still requires explicit support", () => {
+  const p = planJSON(["F001", "F002"]);
+  p.chapters[0]!.titleFactRefs = [];
+  assert.equal(
+    parseNarrativePlan(JSON.stringify(p), facts).chapters[0]!.titleMode,
+    "thematic",
+  );
+  p.chapters[0]!.titleMode = "factual";
+  assert.throws(() => parseNarrativePlan(JSON.stringify(p), facts));
+});
+
+test("a year supported elsewhere in the paragraph cannot date an unknown-time atomic claim", () => {
+  const dated = {
+    ...f("F003", "1976年我进厂。"),
+    time: {
+      start: 23712,
+      end: 23723,
+      precision: "year" as const,
+      certainty: "stated" as const,
+      originalText: "1976年",
+    },
+    temporalPolicy: {
+      explicitCalendarAllowed: true,
+      uncertaintyMustRemain: false,
+    },
+  };
+  const p = {
+    text: "1976年我在河边玩，然后我进厂。",
+    factRefs: ["F001", "F003"],
+  };
+  const r = parseReview(
+    JSON.stringify({
+      complete: true,
+      claims: [
+        {
+          span: "1976年我在河边玩",
+          claim: "河边玩",
+          kind: "temporal",
+          supportedBy: ["F001"],
+          status: "supported",
+        },
+        {
+          span: "我进厂",
+          claim: "进厂",
+          kind: "factual",
+          supportedBy: ["F003"],
+          status: "supported",
+        },
+      ],
+      problems: [],
+    }),
+    p.factRefs,
+    p.text,
+  );
+  assert.ok(
+    paragraphProblems(p, [facts[0]!, dated], r).includes(
+      "UNSUPPORTED_TEMPORAL_CLAIM",
+    ),
+  );
 });

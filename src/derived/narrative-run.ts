@@ -56,6 +56,25 @@ export async function generateNarrative(
             error instanceof DomainError
               ? error.code + ":" + error.message
               : "NARRATIVE_FORMAT";
+          try {
+            const rejected = JSON.parse(raw);
+            g.rejectedStructure = {
+              keys: Object.keys(rejected).slice(0, 12),
+              chapters: Array.isArray(rejected.chapters)
+                ? rejected.chapters.slice(0, 20).map((c: any) => ({
+                    keys: Object.keys(c),
+                    titleFactRefs: c.titleFactRefs,
+                    paragraphs: c.paragraphs?.map((p: any) => ({
+                      keys: Object.keys(p),
+                      factRefs: p.factRefs,
+                    })),
+                  }))
+                : undefined,
+              omissions: rejected.omissions,
+            };
+          } catch {
+            /* No free text/hidden reasoning retained. */
+          }
           throw error;
         }
       },
@@ -91,67 +110,90 @@ export async function generateNarrative(
       const allowed = facts.filter((f) => brief.factRefs.includes(f.id));
       let repair: unknown = null;
       let accepted = false;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        await save(
-          `chapter:${g.candidates.length + 1}/${plan.chapters.length}`,
-        );
-        const p = await call(
-          attempt ? NARRATIVE_REPAIR_PROMPT : NARRATIVE_WRITE_PROMPT,
-          {
-            title,
-            brief,
-            facts: material(allowed),
-            style: styleSlot(g.manifest.persona),
-            ...(repair ? { repair } : {}),
-          },
-          (raw) => parseParagraph(raw, brief),
-        );
-        const r = await review(p.text, allowed, "paragraph");
-        const issues = paragraphProblems(p, allowed, r);
-        (g.atomicReviews ??= []).push({
-          chapterId: chapter.id,
-          paragraphIndex: index,
-          attempt,
-          report: r,
-        });
-        for (const code of issues)
-          (g.diagnostics ??= []).push({
+      try {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          await save(
+            `chapter:${g.candidates.length + 1}/${plan.chapters.length}`,
+          );
+          const p = await call(
+            attempt ? NARRATIVE_REPAIR_PROMPT : NARRATIVE_WRITE_PROMPT,
+            {
+              title,
+              brief,
+              facts: material(allowed),
+              style: styleSlot(g.manifest.persona),
+              ...(repair ? { repair } : {}),
+            },
+            (raw) => parseParagraph(raw, brief),
+          );
+          const r = await review(p.text, allowed, "paragraph");
+          const issues = paragraphProblems(p, allowed, r);
+          (g.atomicReviews ??= []).push({
             chapterId: chapter.id,
             paragraphIndex: index,
             attempt,
-            claimKind: code.includes("TEMPORAL")
-              ? "temporal"
-              : code.includes("ATTRIBUTION")
-                ? "attribution"
-                : "factual",
-            status: "unsupported",
-            factRefs: p.factRefs,
-            reasonCode: code,
+            report: r,
           });
-        await save("reviewing");
-        if (reviewPassed(r) && !issues.length) {
-          paragraphs.push(p);
-          accepted = true;
-          break;
+          for (const code of issues)
+            (g.diagnostics ??= []).push({
+              chapterId: chapter.id,
+              paragraphIndex: index,
+              attempt,
+              claimKind: code.includes("TEMPORAL")
+                ? "temporal"
+                : code.includes("ATTRIBUTION")
+                  ? "attribution"
+                  : "factual",
+              status: "unsupported",
+              factRefs: p.factRefs,
+              reasonCode: code,
+            });
+          await save("reviewing");
+          if (reviewPassed(r) && !issues.length) {
+            paragraphs.push(p);
+            accepted = true;
+            break;
+          }
+          const covered = new Set(
+            r.claims
+              .filter(
+                (c) =>
+                  ["supported", "compatible_paraphrase"].includes(c.status) &&
+                  c.kind !== "attribution",
+              )
+              .flatMap((c) => c.supportedBy),
+          );
+          repair = {
+            originalParagraph: p,
+            unsupportedClaims: r.claims.filter((c) =>
+              ["unsupported", "contradicted"].includes(c.status),
+            ),
+            missingFactRefs: brief.factRefs.filter((id) => !covered.has(id)),
+            issues,
+            reviewProblems: r.problems,
+          };
         }
-        const covered = new Set(
-          r.claims
-            .filter(
-              (c) =>
-                ["supported", "compatible_paraphrase"].includes(c.status) &&
-                c.kind !== "attribution",
-            )
-            .flatMap((c) => c.supportedBy),
-        );
-        repair = {
-          originalParagraph: p,
-          unsupportedClaims: r.claims.filter((c) =>
-            ["unsupported", "contradicted"].includes(c.status),
-          ),
-          missingFactRefs: brief.factRefs.filter((id) => !covered.has(id)),
-          issues,
-          reviewProblems: r.problems,
-        };
+      } catch (error) {
+        // InternalModel already exhausted its single format repair. Only legally
+        // optional material may fail locally; deadlines/transport failures propagate.
+        if (
+          !allowed.every((f) => f.narrativePolicy === "optional_ambiguous") ||
+          !(
+            error instanceof SyntaxError ||
+            (error instanceof DomainError &&
+              error.code === "NARRATIVE_VALIDATION")
+          )
+        )
+          throw error;
+        (g.diagnostics ??= []).push({
+          chapterId: chapter.id,
+          paragraphIndex: index,
+          attempt: 1,
+          claimKind: "format",
+          status: "unsupported",
+          factRefs: brief.factRefs,
+          reasonCode: "OPTIONAL_FORMAT_FAILURE",
+        });
       }
       if (!accepted) {
         if (allowed.every((f) => f.narrativePolicy === "optional_ambiguous"))
@@ -171,7 +213,8 @@ export async function generateNarrative(
     if (!paragraphs.length) continue;
     const titleFacts = facts.filter(
       (f) =>
-        chapter.titleFactRefs.includes(f.id) &&
+        (!chapter.titleFactRefs.length ||
+          chapter.titleFactRefs.includes(f.id)) &&
         paragraphs.some((p) => p.factRefs.includes(f.id)),
     );
     let titleOK = false;

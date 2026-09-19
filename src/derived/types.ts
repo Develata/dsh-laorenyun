@@ -113,6 +113,7 @@ export interface Generation {
   evidence: ModelEvidence[];
   error?: string;
   validationReason?: string;
+  rejectedStructure?: unknown;
 }
 export type GenerationSummary = Pick<
   Generation,

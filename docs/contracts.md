@@ -305,3 +305,10 @@ Phase5 HTTP边界：普通JSON请求streaming读取≤80,000 bytes/10秒、解�
 `narrative-v2` 固定 manifest → FactAtoms → 章节/段落 briefs → 自由 Writer → 独立逐项事实审校。每段 factRefs 非空且在计划范围，Verifier 必须覆盖所有段落/章名；不支持事实拒绝并最多一次语义修复。不能用 Persona 补充事实，未知时间不自动成为 prose。旧 phase4-v1 结果和导出保持可读，历史兼容验证器不用于新的生产生成。
 
 模型内部任务跨档案共享最多2并发、32等待位置；入队时间也计入60秒调用期限；无工具、一次格式修复，总生成截止不重置。失败记录固定校验原因，不存入日志原始模型文本。
+
+
+### RC2 段落契约
+
+具体schema以`src/derived/narrative.ts`为准。每个FactAtom都被使用或以Host验证的闭合原因省略；unknown-time本人事实仍必需，未解冲突排除，未绑定身份的家人关系可省略。thematic标题可不含事实引用，仍由已验证章节材料审校；factual标题必须有引用。每段原子span必须出现在正文，支持ID只能来自该段；supported/compatible_paraphrase必须有支持，nonfactual只允许narrative_glue。每个使用事实必须被实际支持的内容命题覆盖，不能用attribution命题冒充事实表达。
+
+标题与段落各自最多一次语义修复；所有调用共用原生成截止。已通过段落不重写；仅可省略事实组成的失败段落可退出正文并记录原因。JSON导出包含FactAtom映射和omissions，段落factRefs仍能解析到节点修订及源证言；省略元数据不插入正文。
