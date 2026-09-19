@@ -220,7 +220,13 @@ export async function generateNarrative(
         { text: title, factRefs: [] },
         titleFacts.filter((f) => !f.attribution.required),
       );
-      if (reviewPassed(r) && !issues.length) {
+      // The title must not become a second, loosely paraphrased factual surface.
+      // Pure thematic labels remain free; an assertive heading must also occur
+      // in already validated prose. Only headings have this extractive bound.
+      const titleGrounded =
+        r.claims.every((c) => c.status === "nonfactual") ||
+        paragraphs.some((p) => p.text.includes(title));
+      if (reviewPassed(r) && !issues.length && titleGrounded) {
         titleOK = true;
         break;
       }
@@ -240,6 +246,7 @@ export async function generateNarrative(
           {
             originalTitle: title,
             facts: material(titleFacts),
+            validatedParagraphs: paragraphs.map((p) => p.text),
             issues: r,
           },
           (raw) => text(obj(JSON.parse(raw), ["title"]).title, 60),

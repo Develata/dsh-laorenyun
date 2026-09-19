@@ -704,7 +704,7 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
         if (input.task) {
           const title = input.task.startsWith("title:");
           if (!title) reviews++;
-          const supported = !title && !rejectAll && reviews % 2 === 0;
+          const supported = title || (!rejectAll && reviews % 2 === 0);
           raw = {
             complete: true,
             claims: [
@@ -720,13 +720,13 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
           };
         } else if (input.originalTitle) {
           assert.equal(input.briefs, undefined);
-          raw = { title: "在合肥长大" };
+          raw = { title: "我靠这门手艺吃饭" };
         } else if (input.brief) {
           raw = input.repair
             ? {
                 edits: [
                   {
-                    span: input.repair.editableSpans[0],
+                    target: input.repair.targets[0].id,
                     replacement: "1978年，我来到合肥读书。",
                   },
                 ],

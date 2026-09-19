@@ -310,13 +310,15 @@ test("paragraph repair leaves successful paragraphs intact; optional-only failur
             out = {
               edits: [
                 {
-                  span: input.repair.editableSpans[0],
+                  target: input.repair.targets[0].id,
                   replacement: input.repair.editableSpans[0],
                 },
               ],
               append: "",
               attributions: out.attributions,
             };
+        } else if (input.originalTitle) {
+          out = { title: "家里的日子" };
         } else if (input.task) {
           out = {
             complete: true,
@@ -567,7 +569,14 @@ test("targeted repair cannot move supported family attribution while removing a 
   ]);
   const repaired = parseParagraphRepair(
     JSON.stringify({
-      edits: [{ span: "，交往带着自然的亲近", replacement: "" }],
+      edits: [
+        {
+          target: contract.targets.find(
+            (t) => t.span === "，交往带着自然的亲近",
+          )!.id,
+          replacement: "",
+        },
+      ],
       append: "",
       attributions: p.attributions,
     }),
@@ -580,7 +589,7 @@ test("targeted repair cannot move supported family attribution while removing a 
       JSON.stringify({
         edits: [
           {
-            span: p.text,
+            target: "not-an-editable-target",
             replacement: "家里用煤油灯照明。据孩子说，邻居们在门口聊天。",
           },
         ],
@@ -665,7 +674,12 @@ test("temporal glue repair can split clauses without moving or rewriting their s
   assert.ok(span);
   const next = parseParagraphRepair(
     JSON.stringify({
-      edits: [{ span, replacement: span.replace("小鱼，邻居", "小鱼。邻居") }],
+      edits: [
+        {
+          target: contract.targets.find((t) => t.span === span)!.id,
+          replacement: span.replace("小鱼，邻居", "小鱼。邻居"),
+        },
+      ],
       append: "",
       attributions: [],
     }),
@@ -678,7 +692,10 @@ test("temporal glue repair can split clauses without moving or rewriting their s
     parseParagraphRepair(
       JSON.stringify({
         edits: [
-          { span, replacement: span.replace("小鱼，邻居", "大鱼。邻居") },
+          {
+            target: contract.targets.find((t) => t.span === span)!.id,
+            replacement: span.replace("小鱼，邻居", "大鱼。邻居"),
+          },
         ],
         append: "",
         attributions: [],
