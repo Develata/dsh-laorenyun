@@ -704,7 +704,7 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
         if (input.task) {
           const title = input.task.startsWith("title:");
           if (!title) reviews++;
-          const supported = title || (!rejectAll && reviews % 2 === 0);
+          const supported = !title && !rejectAll && reviews % 2 === 0;
           raw = {
             complete: true,
             claims: [
@@ -718,6 +718,9 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
             ],
             problems: [],
           };
+        } else if (input.originalTitle) {
+          assert.equal(input.briefs, undefined);
+          raw = { title: "在合肥长大" };
         } else if (input.brief) {
           raw = input.repair
             ? {
@@ -769,6 +772,15 @@ test("narrative-v2 repairs unsupported prose once and preserves last good book o
     const good = await generate();
     assert.equal(good.state, "published");
     assert.equal(reviews, 2);
+    assert.equal(
+      (good.result as Biography).sections[0]!.title,
+      "1978年，我来到合肥读书。",
+    );
+    assert.ok(
+      good.diagnostics?.some(
+        (d) => d.reasonCode === "VALIDATED_HEADING_FALLBACK",
+      ),
+    );
     assert.equal(
       (good.result as Biography).sections[0]!.text,
       "1978年，我来到合肥读书。",

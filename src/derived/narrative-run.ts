@@ -239,15 +239,47 @@ export async function generateNarrative(
           TITLE_REPAIR_PROMPT,
           {
             originalTitle: title,
-            briefs: chapter.paragraphs.map((p) => p.brief),
             facts: material(titleFacts),
             issues: r,
           },
           (raw) => text(obj(JSON.parse(raw), ["title"]).title, 60),
         );
     }
-    if (!titleOK)
-      throw new DomainError("NARRATIVE_UNSUPPORTED", "title repair failed");
+    if (!titleOK) {
+      // A failed title must not discard independently validated prose. Reuse a
+      // short, self-supported atomic span already reviewed in this chapter;
+      // never borrow an unverified planner brief or synthesize a new assertion.
+      const heading = g.atomicReviews
+        ?.filter((r) => r.chapterId === chapter.id && r.paragraphIndex >= 0)
+        .flatMap((r) => r.report.claims)
+        .find(
+          (c) =>
+            c.kind === "factual" &&
+            ["supported", "compatible_paraphrase"].includes(c.status) &&
+            c.span.length <= 40 &&
+            c.supportedBy.length > 0 &&
+            c.supportedBy.every((id) =>
+              facts.some(
+                (f) =>
+                  f.id === id &&
+                  f.sourceMode === "self" &&
+                  f.certainty === "stated" &&
+                  f.conflictPolicy !== "open",
+              ),
+            ) &&
+            paragraphs.some((p) => p.text.includes(c.span)),
+        );
+      title = heading?.span ?? `第${g.candidates.length + 1}章`;
+      (g.diagnostics ??= []).push({
+        chapterId: chapter.id,
+        paragraphIndex: -1,
+        attempt: 1,
+        claimKind: "title",
+        status: "supported",
+        factRefs: heading?.supportedBy ?? [],
+        reasonCode: "VALIDATED_HEADING_FALLBACK",
+      });
+    }
     if (paragraphs.length)
       g.candidates.push(
         publishChapter({ ...chapter, title }, paragraphs, facts),
