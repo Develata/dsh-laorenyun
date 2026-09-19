@@ -53,8 +53,23 @@ export function repairContract(
     const end = at + span.length;
     if (/[，；、。]/u.test(p.text[end] ?? "")) editable.add(span + p.text[end]);
   }
+  const rejectedRanges = r.claims
+    .filter((c) => ["unsupported", "contradicted"].includes(c.status))
+    .map((c) => ({
+      start: p.text.indexOf(c.span),
+      end: p.text.indexOf(c.span) + c.span.length,
+    }));
   const protectedRanges = accepted
-    .filter((c) => !editable.has(c.span))
+    .filter((c) => {
+      const start = p.text.indexOf(c.span),
+        end = start + c.span.length;
+      // A supported fact can share words with a rejected temporal/causal claim.
+      // Locking that overlap would also lock the unsupported connective itself.
+      return (
+        !editable.has(c.span) &&
+        !rejectedRanges.some((r) => r.start <= start && r.end >= end)
+      );
+    })
     .map((c) => ({
       start: p.text.indexOf(c.span),
       end: p.text.indexOf(c.span) + c.span.length,

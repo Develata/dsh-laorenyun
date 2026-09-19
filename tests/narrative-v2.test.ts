@@ -777,3 +777,82 @@ test("child is offspring provenance, never the narrator's childhood or a spouse"
     );
   }
 });
+
+test("rejected temporal span may overlap a supported fact without locking the unsupported cue", async () => {
+  const { repairContract, parseParagraphRepair } = await import(
+    "../src/derived/narrative-repair.ts"
+  );
+  const fixed = "家里有四个孩子",
+    bad = "那时候啊，邻居们彼此熟悉，吃过饭就在门口聊天";
+  const p = {
+    text: fixed + "。小时候我在河边玩。" + bad + "。",
+    factRefs: ["F001", "F002", "F003"],
+  };
+  const fs = [
+    f("F001", fixed),
+    f("F002", "小时候我在河边玩"),
+    f("F003", "邻居们彼此熟悉，吃过饭就在门口聊天"),
+  ];
+  const claims = [
+    {
+      span: fixed,
+      claim: fixed,
+      kind: "factual",
+      status: "supported",
+      supportedBy: ["F001"],
+    },
+    {
+      span: "小时候我在河边玩",
+      claim: "童年玩耍",
+      kind: "factual",
+      status: "supported",
+      supportedBy: ["F002"],
+    },
+    {
+      span: "那时候啊，邻居们彼此熟悉",
+      claim: "邻居熟悉",
+      kind: "factual",
+      status: "supported",
+      supportedBy: ["F003"],
+    },
+    {
+      span: "吃过饭就在门口聊天",
+      claim: "饭后聊天",
+      kind: "factual",
+      status: "supported",
+      supportedBy: ["F003"],
+    },
+    {
+      span: bad,
+      claim: "聊天发生于童年",
+      kind: "temporal",
+      status: "unsupported",
+      supportedBy: [],
+    },
+  ];
+  const review = parseReview(
+    JSON.stringify({ complete: true, claims, problems: [] }),
+    p.factRefs,
+    p.text,
+  );
+  const contract = repairContract(p, review, fs, [
+    "UNSUPPORTED_TEMPORAL_CLAIM",
+  ]);
+  assert.ok(contract.protectedSpans.includes(fixed));
+  assert.ok(!contract.protectedSpans.some((s) => s.includes("那时候")));
+  const next = parseParagraphRepair(
+    JSON.stringify({
+      edits: [
+        {
+          target: contract.targets.find((t) => t.span === bad)!.id,
+          replacement: bad.replace("那时候啊，", ""),
+        },
+      ],
+      append: "",
+      attributions: [],
+    }),
+    { brief: "邻里生活", factRefs: p.factRefs },
+    contract,
+  );
+  assert.equal(next.text, p.text.replace("那时候啊，", ""));
+});
