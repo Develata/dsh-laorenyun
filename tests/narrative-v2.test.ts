@@ -608,3 +608,83 @@ test("birthplace and childhood visits cannot become a growth/residence claim eve
   );
   assert.deepEqual(paragraphProblems(p, [f("F001", "我在村子里长大。")]), []);
 });
+
+test("temporal glue repair can split clauses without moving or rewriting their supported content", async () => {
+  const { repairContract, parseParagraphRepair } = await import(
+    "../src/derived/narrative-repair.ts"
+  );
+  const a = "小时候我常到村边的河里摸小鱼",
+    b = "邻居们彼此熟悉";
+  const p = {
+    text: a + "，" + b + "，吃过饭就在门口聊天。",
+    factRefs: ["F001", "F002"],
+  };
+  const facts = [f("F001", a), f("F002", b + "，吃过饭就在门口聊天")];
+  const review = parseReview(
+    JSON.stringify({
+      complete: true,
+      problems: [],
+      claims: [
+        {
+          span: a,
+          claim: a,
+          kind: "factual",
+          status: "supported",
+          supportedBy: ["F001"],
+        },
+        {
+          span: b,
+          claim: b,
+          kind: "factual",
+          status: "supported",
+          supportedBy: ["F002"],
+        },
+        {
+          span: "吃过饭就在门口聊天",
+          claim: "聊天",
+          kind: "factual",
+          status: "supported",
+          supportedBy: ["F002"],
+        },
+        {
+          span: "小时候",
+          claim: "聊天发生于童年",
+          kind: "temporal",
+          status: "unsupported",
+          supportedBy: [],
+        },
+      ],
+    }),
+    p.factRefs,
+    p.text,
+  );
+  const contract = repairContract(p, review, facts, [
+    "UNSUPPORTED_TEMPORAL_CLAIM",
+  ]);
+  const span = contract.transitionSpans.find((s) => s.includes("小鱼，邻居"))!;
+  assert.ok(span);
+  const next = parseParagraphRepair(
+    JSON.stringify({
+      edits: [{ span, replacement: span.replace("小鱼，邻居", "小鱼。邻居") }],
+      append: "",
+      attributions: [],
+    }),
+    { brief: "不同话题", factRefs: p.factRefs },
+    contract,
+  );
+  assert.equal(next.text, p.text.replace("小鱼，邻居", "小鱼。邻居"));
+  assert.ok(next.text.includes(a));
+  assert.throws(() =>
+    parseParagraphRepair(
+      JSON.stringify({
+        edits: [
+          { span, replacement: span.replace("小鱼，邻居", "大鱼。邻居") },
+        ],
+        append: "",
+        attributions: [],
+      }),
+      { brief: "不同话题", factRefs: p.factRefs },
+      contract,
+    ),
+  );
+});
