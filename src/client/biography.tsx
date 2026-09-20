@@ -5,6 +5,7 @@ import type {
   Persona,
   Biography,
 } from "../derived/types.ts";
+import { readingTitle } from "../river/reading-title.ts";
 export function BiographyView({
   busy,
   active,
@@ -66,7 +67,7 @@ export function BiographyView({
           <strong>阅读自传</strong>
           {book.sections.map((section, index) => (
             <a key={section.id} href={`#ly-book-chapter-${index}`}>
-              {section.title}
+              {readingTitle(section.title, section.text, index)}
             </a>
           ))}
         </nav>
@@ -149,7 +150,7 @@ export function BiographyView({
           )}
           {book.sections.map((s, index) => (
             <section key={s.id} id={`ly-book-chapter-${index}`}>
-              <h3>{s.title}</h3>
+              <h3>{readingTitle(s.title, s.text, index)}</h3>
               {s.text.split("\n\n").map((p, i) => (
                 <p key={i}>{p}</p>
               ))}

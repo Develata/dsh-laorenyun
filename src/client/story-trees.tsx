@@ -10,6 +10,62 @@ import type { ArcPath } from "../river/journey.ts";
 import { timeLabel } from "../river/layout.ts";
 const curve = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   `M ${a.x} ${a.y} C ${(a.x + b.x) / 2} ${a.y}, ${(a.x + b.x) / 2} ${b.y}, ${b.x} ${b.y}`;
+function branchCurve(
+  a: { x: number; y: number; direction?: { x: number; y: number } },
+  b: { x: number; y: number; direction: { x: number; y: number } },
+) {
+  const distance = Math.hypot(b.x - a.x, b.y - a.y),
+    d = a.direction ?? b.direction;
+  return `M ${a.x} ${a.y} C ${a.x + d.x * distance * 0.4} ${a.y + d.y * distance * 0.4}, ${b.x - b.direction.x * distance * 0.3} ${b.y - b.direction.y * distance * 0.3}, ${b.x} ${b.y}`;
+}
+function caption(text: string, label: string) {
+  const year = label.match(/^(\d{4})年/);
+  const prefix = text.startsWith(label)
+    ? label
+    : year && text.startsWith(year[0])
+      ? year[0]
+      : "";
+  return prefix ? text.slice(prefix.length).replace(/^[，、,\s]+/, "") : text;
+}
+type Box = { x: number; y: number; width: number; height: number };
+function captions(
+  points: Array<{ id: string; x: number; y: number }>,
+  width: number,
+) {
+  const result = new Map<string, Box>(),
+    occupied: Box[] = points.map((p) => ({
+      x: p.x - 23,
+      y: p.y - 23,
+      width: 46,
+      height: 46,
+    }));
+  const overlap = (a: Box, b: Box) =>
+    Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
+    Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  for (const p of points) {
+    const candidates = [
+      { x: p.x - 74, y: p.y + 25 },
+      { x: p.x - 74, y: p.y - 95 },
+      { x: p.x + 28, y: p.y - 34 },
+      { x: p.x - 176, y: p.y - 34 },
+    ].map((b) => ({
+      ...b,
+      x: Math.max(0, Math.min(width - 148, b.x)),
+      y: Math.max(0, b.y),
+      width: 148,
+      height: 70,
+    }));
+    candidates.sort(
+      (a, b) =>
+        occupied.reduce((sum, r) => sum + overlap(a, r), 0) -
+        occupied.reduce((sum, r) => sum + overlap(b, r), 0),
+    );
+    const chosen = candidates[0]!;
+    result.set(p.id, chosen);
+    occupied.push(chosen);
+  }
+  return result;
+}
 export function StoryForest({
   data,
   path,
@@ -38,7 +94,7 @@ export function StoryForest({
   const nodes = new Map<string, (typeof data.nodes)[number]>(
     data.nodes.map((n) => [n.id, n]),
   );
-  let groveTop = 120;
+  let groveTop = 100;
   const layouts = trees.map((t, i) => {
     const localPath: ArcPath = drifting
       ? {
@@ -62,8 +118,11 @@ export function StoryForest({
       ),
     };
     if (drifting) {
-      const visible = expanded === t.id ? layout.points : [layout.points[0]!];
-      groveTop = Math.max(...visible.map((p) => p.y)) + 180;
+      const visible =
+        expanded === t.id
+          ? layout.points
+          : [layout.junction ?? layout.points[0]!];
+      groveTop = Math.max(...visible.map((p) => p.y)) + 140;
     }
     return layout;
   });
@@ -72,9 +131,10 @@ export function StoryForest({
       Math.max(
         0,
         ...layouts.flatMap((l) =>
-          (expanded === l.tree.id ? l.points : [l.points[0]!]).map(
-            (p) => p.y + 120,
-          ),
+          (expanded === l.tree.id
+            ? l.points
+            : [l.junction ?? l.points[0]!]
+          ).map((p) => p.y + 120),
         ),
       ),
     );
@@ -82,7 +142,7 @@ export function StoryForest({
   const visible = new Map(
     layouts.flatMap((l) =>
       l.points
-        .filter((p) => expanded === l.tree.id || p.depth === 0)
+        .filter((p) => expanded === l.tree.id || (!l.junction && p.depth === 0))
         .map((p) => [p.id, p] as const),
     ),
   );
@@ -124,20 +184,35 @@ export function StoryForest({
           root = l.points[0]!,
           count = l.tree.members.length + l.tree.hidden.length;
         const branch = l.tree.kind !== "single";
+        const labels = captions(open ? l.points : [root], width);
         return (
           <g key={l.tree.id} data-story-root={l.tree.root}>
-            <path d={curve(l.anchor, root)} className="ly-tributary-root" />
-            {open && (
-              <g className="ly-tree-open">
+            <path
+              d={curve(l.anchor, l.junction ?? root)}
+              className="ly-tributary-root"
+            />
+            {(open || (!drifting && branch)) && (
+              <g
+                className={open ? "ly-tree-open" : "ly-tree-outline"}
+                aria-hidden={!open || undefined}
+              >
                 {l.points
-                  .filter((p) => p.depth > 0)
+                  .filter((p) => p.parent !== null || l.junction !== null)
                   .map((p) => {
                     const parent =
-                      l.points.find((x) => x.id === p.parent) ?? root;
+                      l.points.find((x) => x.id === p.parent) ??
+                      l.junction ??
+                      root;
                     return (
                       <path
                         key={p.id}
-                        d={curve(parent, p)}
+                        d={branchCurve(parent, p)}
+                        style={{
+                          strokeWidth: [10, 7, 4, 2.5][
+                            Math.min(3, p.depth + (l.junction ? 1 : 0))
+                          ],
+                          opacity: 1 - p.depth * 0.13,
+                        }}
                         pathLength={1}
                         className={`ly-tributary ${l.tree.kind === "elaboration" ? "" : "ly-visual-group"}`}
                       />
@@ -145,10 +220,34 @@ export function StoryForest({
                   })}
               </g>
             )}
-            {(open ? l.points : [root]).map((p) => {
+            {l.junction && (
+              <g
+                role="button"
+                tabIndex={0}
+                aria-expanded={open}
+                aria-label={`${count}个故事，${open ? "收起" : "展开"}浏览分组`}
+                onClick={() => setExpanded(open ? null : l.tree.id)}
+                onKeyDown={key(() => setExpanded(open ? null : l.tree.id))}
+              >
+                <path
+                  d={`M ${l.junction.x} ${l.junction.y - 14} Q ${l.junction.x + 28} ${l.junction.y} ${l.junction.x} ${l.junction.y + 14} Q ${l.junction.x - 28} ${l.junction.y} ${l.junction.x} ${l.junction.y - 14}`}
+                  className="ly-junction"
+                />
+                <text
+                  x={l.junction.x}
+                  y={l.junction.y + 40}
+                  textAnchor="middle"
+                  className="ly-tree-control"
+                >
+                  {count} 个故事
+                </text>
+              </g>
+            )}
+            {(open ? l.points : l.junction ? [] : [root]).map((p) => {
               const n = nodes.get(p.id)!;
+              const label = labels.get(p.id)!;
               const toggle = () =>
-                p.depth === 0 && branch
+                p.depth === 0 && branch && !l.junction
                   ? setExpanded(open ? null : l.tree.id)
                   : pick(p.id);
               return (
@@ -156,17 +255,19 @@ export function StoryForest({
                   key={p.id}
                   role="button"
                   tabIndex={0}
-                  aria-expanded={p.depth === 0 && branch ? open : undefined}
-                  aria-label={`${timeLabel(n)}：${n.keySentence}${p.depth === 0 && branch ? `，${count}个故事，${open ? "收起" : "展开"}` : "，预览故事"}`}
+                  aria-expanded={
+                    p.depth === 0 && branch && !l.junction ? open : undefined
+                  }
+                  aria-label={`${timeLabel(n)}：${n.keySentence}${p.depth === 0 && branch && !l.junction ? `，${count}个故事，${open ? "收起" : "展开"}` : "，预览故事"}`}
                   onClick={toggle}
                   onKeyDown={key(toggle)}
-                  className={p.depth > 0 ? "ly-tree-leaf" : "ly-tree-root"}
+                  className={`${p.depth > 0 || l.junction ? "ly-tree-leaf" : "ly-tree-root"} ${selected === p.id ? "ly-node-selected" : ""}`}
                 >
                   <rect
-                    x={Math.max(0, Math.min(width - 160, p.x - 80))}
-                    y={p.y - 25}
-                    width={160}
-                    height={120}
+                    x={p.x - 23}
+                    y={p.y - 23}
+                    width={46}
+                    height={46}
                     fill="transparent"
                   />
                   <path
@@ -180,8 +281,8 @@ export function StoryForest({
                     fill="#fff"
                     fontSize="13"
                   >
-                    {p.depth === 0 && branch
-                      ? count
+                    {p.depth === 0 && branch && !l.junction
+                      ? ""
                       : n.hasOpenConflict
                         ? "!"
                         : ""}
@@ -191,18 +292,24 @@ export function StoryForest({
                   </title>
                   {(p.depth === 0 || open) && (
                     <foreignObject
-                      x={Math.max(0, Math.min(width - 160, p.x - 80))}
-                      y={p.y + 24}
-                      width={160}
+                      x={label.x}
+                      y={label.y}
+                      width={148}
                       height={70}
                       pointerEvents="auto"
                     >
                       <div className="ly-tree-caption">
-                        <small>{timeLabel(n)}</small>
+                        <small>
+                          {n.placement === "drifting" ? "" : timeLabel(n)}
+                          {p.depth === 0 && branch && !l.junction
+                            ? ` · ${count} 个故事`
+                            : ""}
+                        </small>
                         <span>
-                          {p.depth === 0
-                            ? n.keySentence
-                            : n.keySentence.slice(0, 24)}
+                          {caption(n.keySentence, timeLabel(n)).slice(
+                            0,
+                            open ? 28 : 18,
+                          )}
                         </span>
                       </div>
                     </foreignObject>
@@ -210,7 +317,7 @@ export function StoryForest({
                 </g>
               );
             })}
-            {open && (
+            {open && !l.junction && (
               <g
                 role="button"
                 tabIndex={0}

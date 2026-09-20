@@ -38,7 +38,12 @@ export function storyTrees(data: RiverSnapshot, maxDepth = 3): StoryTree[] {
   for (const [child, p] of parent)
     children.set(p, [...(children.get(p) ?? []), child]);
   const trees: StoryTree[] = [];
-  for (const n of data.nodes.filter((n) => !parent.has(n.id))) {
+  for (const n of [...data.nodes]
+    .filter((n) => !parent.has(n.id))
+    .sort(
+      (a, b) =>
+        (a.time.start ?? 0) - (b.time.start ?? 0) || a.id.localeCompare(b.id),
+    )) {
     const t: StoryTree = {
       id: n.id,
       root: n.id,
@@ -62,6 +67,11 @@ export function storyTrees(data: RiverSnapshot, maxDepth = 3): StoryTree[] {
     const first = members[0]!;
     const rest = members.slice(1);
     first.kind = kind;
+    first.members = first.members.map((m) => ({
+      ...m,
+      depth: 1,
+      parent: null,
+    }));
     for (const t of rest) {
       first.members.push(
         ...t.members.map((m) => ({ ...m, depth: 1, parent: null })),
@@ -121,37 +131,97 @@ export function treeGeometry(
           width - anchor.x < width * 0.38
         ? -1
         : 1;
-  const available = side > 0 ? width - anchor.x - 24 : anchor.x - 24;
-  const depth = Math.max(1, ...tree.members.map((m) => m.depth));
-  const spacing = Math.max(20, Math.min(92, available / (depth + 1.3)));
-  const levels = new Map<number, typeof tree.members>();
-  for (const m of tree.members)
-    levels.set(m.depth, [...(levels.get(m.depth) ?? []), m]);
-  const points = tree.members.map((m) => {
-    const peers = levels.get(m.depth)!;
-    const sibling = tree.members.indexOf(m) * 112;
-    const distance = (m.depth + 0.65) * spacing * side;
-    // Shrink tangential fan only if necessary, keeping the root time anchor fixed.
-    const proposedX = anchor.x + normal.x * distance;
-    const dx = tangent.x * sibling;
-    const factor =
-      dx === 0
-        ? 1
-        : Math.max(
-            0,
-            Math.min(
-              1,
-              (dx > 0 ? width - 22 - proposedX : proposedX - 22) / Math.abs(dx),
-            ),
-          );
-    return {
-      ...m,
-      x: proposedX + dx * factor,
-      y: anchor.y + normal.y * distance + tangent.y * sibling * factor,
-    };
+  const grouped = tree.kind === "period" || tree.kind === "branch";
+  const rotate = (d: { x: number; y: number }, angle: number) => ({
+    x: d.x * Math.cos(angle) - d.y * Math.sin(angle),
+    y: d.x * Math.sin(angle) + d.y * Math.cos(angle),
   });
-  return { anchor, s, tangent, normal, side, spacing, points };
+  const base = { x: normal.x * side, y: normal.y * side };
+  const available = Math.max(
+    90,
+    side > 0 ? width - anchor.x - 72 : anchor.x - 72,
+  );
+  const maxDepth = Math.max(
+    1,
+    ...tree.members.map((m) => m.depth + (grouped ? 1 : 0)),
+  );
+  const scale = Math.min(1.25, available / (70 + maxDepth * 105));
+  const spacing = 120 * scale;
+  const junction = {
+    x: anchor.x + base.x * 65 * scale,
+    y: anchor.y + base.y * 65 * scale,
+    direction: base,
+  };
+  type Point = StoryTree["members"][number] & {
+    x: number;
+    y: number;
+    direction: { x: number; y: number };
+  };
+  const points: Point[] = [];
+  const children = (id: string | null) =>
+    tree.members
+      .filter((m) => m.parent === id)
+      .sort((a, b) => a.id.localeCompare(b.id));
+  const visit = (
+    members: StoryTree["members"],
+    parent: typeof junction,
+    depth: number,
+  ) => {
+    const halfFan =
+      members.length < 2 ? 0 : Math.min(0.72, 0.58 * (members.length - 1));
+    members.forEach((m, i) => {
+      const angle =
+        members.length === 1
+          ? depth % 2
+            ? 0.14
+            : -0.23
+          : ((2 * i) / (members.length - 1) - 1) * halfFan;
+      const direction = rotate(parent.direction, angle);
+      const length = Math.max(75, 130 - depth * 15) * scale;
+      const point = {
+        ...m,
+        direction,
+        x: parent.x + direction.x * length,
+        y: parent.y + direction.y * length,
+      };
+      points.push(point);
+      visit(children(m.id), point, depth + 1);
+    });
+  };
+  if (grouped) visit(children(null), junction, 1);
+  else {
+    const m = tree.members[0]!;
+    const rootPoint = { ...m, ...junction };
+    points.push(rootPoint);
+    visit(children(m.id), rootPoint, 1);
+  }
+  // Keep the entire fan inside the bank. Only the display subtree moves; s/anchor never change.
+  // On narrow viewports use a taller fan so touch areas remain distinct.
+  if (width < 520) {
+    const ordered = [...points].sort(
+      (a, b) => a.y - b.y || a.id.localeCompare(b.id),
+    );
+    for (let i = 1; i < ordered.length; i++) {
+      const p = ordered[i]!,
+        previous = ordered[i - 1]!;
+      if (p.y - previous.y < 100) p.y = previous.y + 100;
+    }
+  }
+  const low = Math.min(...points.map((p) => p.y));
+  if (low < 80) for (const p of points) p.y += 80 - low;
+  for (const p of points) p.x = Math.max(64, Math.min(width - 64, p.x));
+  return {
+    anchor,
+    s,
+    tangent,
+    normal,
+    side,
+    spacing,
+    points,
+    junction: grouped ? junction : null,
+  };
 }
+
 export function selectedCrossLinks(data: RiverSnapshot, id: string | null) {
   return id
     ? data.relations

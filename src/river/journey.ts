@@ -5,13 +5,22 @@ export function journeyPath(width: number, months: number) {
     height = Math.max(760, Math.min(14400, months * 3 + 160));
   const steps = Math.max(2, Math.ceil(height / 500));
   const center = w < 520 ? 36 : w * 0.5,
-    swing = w < 520 ? 12 : Math.min(70, w * 0.12);
-  let d = `M ${center} 70`;
+    swing = w < 520 ? 12 : Math.min(180, w * 0.2);
+  let d = `M ${center} 70`,
+    previous = center,
+    y = 70;
+  const weights = Array.from(
+    { length: steps },
+    (_, i) => [1.2, 0.85, 1.1, 0.75][i % 4]!,
+  );
+  const total = weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < steps; i++) {
-    const a = 70 + ((height - 140) * i) / steps,
-      z = 70 + ((height - 140) * (i + 1)) / steps;
-    const x = center + (i % 2 ? -swing : swing);
-    d += ` C ${x} ${a + (z - a) / 3}, ${x} ${a + (2 * (z - a)) / 3}, ${center} ${z}`;
+    const z = y + ((height - 140) * weights[i]!) / total;
+    const x = center + (i % 2 ? -1 : 1) * swing * [0.7, 0.9, 0.3, 0.65][i % 4]!;
+    // Vertical tangents at shared endpoints: smooth joins with strictly increasing y.
+    d += ` C ${previous} ${y + (z - y) * 0.4}, ${x} ${y + (z - y) * 0.6}, ${x} ${z}`;
+    previous = x;
+    y = z;
   }
   return { d, height, width: w };
 }
@@ -34,5 +43,20 @@ export function intervalPath(
   return Array.from({ length: count + 1 }, (_, i) => {
     const p = path.getPointAtLength(a + ((b - a) * i) / count);
     return `${i ? "L" : "M"} ${p.x} ${p.y}`;
+  }).join(" ");
+}
+
+/** Offset actual arc samples along their local normal; decorative currents never alter time. */
+export function currentPath(path: ArcPath, offset: number) {
+  const length = path.getTotalLength(),
+    count = Math.min(1024, Math.ceil(length / 12));
+  return Array.from({ length: count + 1 }, (_, i) => {
+    const s = (length * i) / count,
+      p = path.getPointAtLength(s),
+      a = path.getPointAtLength(Math.max(0, s - 2)),
+      b = path.getPointAtLength(Math.min(length, s + 2));
+    const norm = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const local = offset + 3 * Math.sin(i * 0.17);
+    return `${i ? "L" : "M"} ${p.x + ((b.y - a.y) / norm) * local} ${p.y - ((b.x - a.x) / norm) * local}`;
   }).join(" ");
 }

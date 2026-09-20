@@ -2,7 +2,7 @@ import { StoryForest } from "./story-trees.tsx";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { RiverSnapshot } from "../river/types.ts";
 import { anchors, arcPosition, timeLabel } from "../river/layout.ts";
-import { journeyPath, intervalPath } from "../river/journey.ts";
+import { journeyPath, intervalPath, currentPath } from "../river/journey.ts";
 export function Journey({
   data,
   onSelect,
@@ -183,7 +183,9 @@ export function Journey({
               onClick={() => jump(Math.floor(p.start! / 12))}
             >
               {Math.floor(p.start! / 12)}
-              <small> · {p.count}</small>
+              <small aria-label={`${p.count}段记忆`}>
+                {"·".repeat(Math.min(8, p.count))}
+              </small>
             </button>
           ))}
         <a href="#ly-drifting-bay">漂流湾</a>
@@ -218,18 +220,14 @@ export function Journey({
               </defs>
               <path d={geometry.d} className="ly-bank" />
               <path ref={path} d={geometry.d} className="ly-water" />
-              <path d={geometry.d} className="ly-current" />
-              <path d={geometry.d} className="ly-current ly-current-inner" />
-              <path
-                d={geometry.d}
-                className="ly-current ly-current-bank"
-                transform="translate(-14 0)"
-              />
-              <path
-                d={geometry.d}
-                className="ly-current ly-current-bank"
-                transform="translate(14 0)"
-              />
+              {path.current &&
+                [-18, 8, 23].map((offset, i) => (
+                  <path
+                    key={offset}
+                    d={currentPath(path.current!, offset)}
+                    className={`ly-current ly-current-${i}`}
+                  />
+                ))}
               {layout
                 .filter((point) => point.band)
                 .map((point) => (
@@ -267,7 +265,7 @@ export function Journey({
           <svg
             className="ly-grove"
             width={width}
-            height={Math.max(360, groveExtent)}
+            height={Math.max(300, groveExtent)}
             role="group"
             aria-label="漂流湾故事群"
           >

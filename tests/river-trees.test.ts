@@ -112,3 +112,76 @@ test("BranchMemo groups are visual-only and large trees expose bounded continuat
   assert.equal(tree.members.length, 8);
   assert.equal(tree.hidden.length, 22);
 });
+
+test("recursive fans center siblings, retain parent-relative lengths and bend single chains", () => {
+  const s = snapshot([
+    { from: "b", to: "a", kind: "ELABORATES" },
+    { from: "c", to: "a", kind: "ELABORATES" },
+    { from: "d", to: "b", kind: "ELABORATES" },
+  ]);
+  const tree = storyTrees(s).find((t) => t.root === "a")!;
+  const path = {
+    getTotalLength: () => 1000,
+    getPointAtLength: (s: number) => ({ x: 600, y: s + 200 }),
+  };
+  const layout = treeGeometry(tree, path, s.nodes[0]!, 23900, 24100, 1200);
+  const [a, b, c, d] = ["a", "b", "c", "d"].map(
+    (id) => layout.points.find((p) => p.id === id)!,
+  );
+  assert.ok(Math.abs((b!.y + c!.y) / 2 - a!.y) < 0.001);
+  assert.ok(
+    Math.abs(
+      Math.hypot(b!.x - a!.x, b!.y - a!.y) -
+        Math.hypot(c!.x - a!.x, c!.y - a!.y),
+    ) < 0.001,
+  );
+  assert.ok(Math.hypot(d!.x - b!.x, d!.y - b!.y) < 150);
+  assert.notDeepEqual(d!.direction, b!.direction);
+  assert.deepEqual(
+    layout,
+    treeGeometry(tree, path, s.nodes[0]!, 23900, 24100, 1200),
+  );
+  const reverse = {
+    ...s,
+    nodes: [...s.nodes].reverse(),
+    relations: [...s.relations].reverse(),
+  };
+  assert.deepEqual(storyTrees(s), storyTrees(reverse));
+  assert.equal(layout.anchor.x, 600);
+  assert.equal(layout.anchor.y, 700);
+});
+test("visual junction has no node identity and drifting geometry stays bounded", () => {
+  for (const count of [0, 1, 2, 3, 30]) {
+    const data = {
+      ...snapshot([]),
+      nodes: Array.from({ length: count }, (_, i) => node(String(i), true)),
+    };
+    const before = JSON.stringify(data);
+    for (const tree of storyTrees(data)) {
+      const layout = treeGeometry(
+        tree,
+        {
+          getTotalLength: () => 500,
+          getPointAtLength: (s) => ({ x: 500, y: s }),
+        },
+        data.nodes.find((n) => n.id === tree.root)!,
+        0,
+        0,
+        1000,
+      );
+      if (tree.kind === "period") {
+        assert.ok(layout.junction);
+        assert.equal("id" in layout.junction!, false);
+        assert.ok(tree.members.every((m) => m.parent === null));
+      }
+      assert.ok(layout.points.every((p) => p.x >= 0 && p.x <= 1000));
+      if (count <= 3)
+        assert.ok(
+          Math.max(...layout.points.map((p) => p.y)) -
+            Math.min(...layout.points.map((p) => p.y)) <
+            300,
+        );
+    }
+    assert.equal(JSON.stringify(data), before);
+  }
+});
