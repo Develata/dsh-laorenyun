@@ -361,6 +361,48 @@ export function StoryForest({
         visible.has(selected) &&
         (() => {
           const p = visible.get(selected)!;
+          const occupied: Box[] = layouts.flatMap((l) => {
+            const shown = l.points.filter((point) => visible.has(point.id));
+            return [
+              ...captions(shown, width).values(),
+              ...shown.map((point) => ({
+                x: point.x - 24,
+                y: point.y - 24,
+                width: 48,
+                height: 48,
+              })),
+            ];
+          });
+          const candidates = [
+            { x: p.x - 85, y: p.y - 150 },
+            { x: p.x - 85, y: p.y + 110 },
+            { x: p.x - 205, y: p.y - 22 },
+            { x: p.x + 35, y: p.y - 22 },
+          ].map((b) => ({
+            ...b,
+            x: Math.max(4, Math.min(width - 174, b.x)),
+            y: Math.max(8, b.y),
+            width: 170,
+            height: 44,
+          }));
+          const cost = (box: Box) =>
+            occupied.reduce(
+              (sum, b) =>
+                sum +
+                Math.max(
+                  0,
+                  Math.min(box.x + box.width, b.x + b.width) -
+                    Math.max(box.x, b.x),
+                ) *
+                  Math.max(
+                    0,
+                    Math.min(box.y + box.height, b.y + b.height) -
+                      Math.max(box.y, b.y),
+                  ),
+              0,
+            );
+          candidates.sort((a, b) => cost(a) - cost(b));
+          const action = candidates[0]!;
           return (
             <g
               role="button"
@@ -370,16 +412,16 @@ export function StoryForest({
               onKeyDown={key(() => onSelect(selected))}
             >
               <rect
-                x={Math.max(4, Math.min(width - 174, p.x - 85))}
-                y={p.y + 104}
+                x={action.x}
+                y={action.y}
                 width={170}
                 height={42}
                 rx={3}
                 fill="#345b50"
               />
               <text
-                x={Math.max(4, Math.min(width - 174, p.x - 85)) + 85}
-                y={p.y + 132}
+                x={action.x + 85}
+                y={action.y + 28}
                 textAnchor="middle"
                 fill="#fff"
                 fontSize="17"
