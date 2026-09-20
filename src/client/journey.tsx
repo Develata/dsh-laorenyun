@@ -21,10 +21,10 @@ export function Journey({
   const [width, setWidth] = useState(800),
     [projection, setProjection] = useState<{
       input: RiverSnapshot;
-      points: Array<{ id: string; x: number; y: number; band: string }>;
+      bands: Array<{ id: string; band: string }>;
     } | null>(null);
   // Never join coordinates from the previous revision/filter to a new node array.
-  const layout = projection?.input === data ? projection.points : [];
+  const layout = projection?.input === data ? projection.bands : [];
   const [extent, setExtent] = useState(0);
   const [groveExtent, setGroveExtent] = useState(360);
   const pendingDecade = useRef<{
@@ -57,17 +57,11 @@ export function Journey({
   useEffect(() => {
     const p = path.current;
     if (!p) return;
-    const length = p.getTotalLength();
     setProjection({
       input: data,
-      points: dated.map((a) => {
-        const point = p.getPointAtLength(
-          arcPosition(a.month, min, max, length),
-        );
+      bands: dated.map((a) => {
         return {
           id: a.node.id,
-          x: point.x,
-          y: point.y,
           band: a.interval
             ? intervalPath(p, a.node.time.start!, a.node.time.end!, min, max)
             : "",
