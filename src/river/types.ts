@@ -15,6 +15,9 @@ export interface RiverQuery {
 }
 export interface RiverSnapshot {
   storyGroups?: { nodeIds: string[] }[];
+  projectionRevision: string;
+  dated: { total: number; offset: number; truncated: boolean };
+  drifting: { total: number; offset: number; truncated: boolean };
   graphRevision: number;
   nodes: RiverNode[];
   total: number;

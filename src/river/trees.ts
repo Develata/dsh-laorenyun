@@ -94,11 +94,9 @@ export function storyTrees(data: RiverSnapshot, maxDepth = 3): StoryTree[] {
       );
   }
   const buckets = new Map<string, StoryTree[]>();
-  for (const t of trees.filter((t) => t.kind === "single")) {
+  for (const t of trees.filter((t) => t.kind === "single" && !t.drifting)) {
     const n = nodes.get(t.root)!;
-    const key = t.drifting
-      ? "drifting"
-      : String(Math.floor(n.time.start! / 24));
+    const key = String(Math.floor(n.time.start! / 24));
     buckets.set(key, [...(buckets.get(key) ?? []), t]);
   }
   for (const ts of buckets.values()) if (ts.length >= 3) group(ts, "period");

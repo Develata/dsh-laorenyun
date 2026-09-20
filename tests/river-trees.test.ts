@@ -21,6 +21,9 @@ const node = (id: string, drifting = false): RiverNode => ({
   status: "confirmed",
 });
 const snapshot = (relations: RiverSnapshot["relations"]): RiverSnapshot => ({
+  projectionRevision: "fixture",
+  dated: { total: 5, offset: 0, truncated: false },
+  drifting: { total: 0, offset: 0, truncated: false },
   graphRevision: 1,
   nodes: ["a", "b", "c", "d", "e"].map((x) => node(x)),
   relations,
@@ -212,4 +215,19 @@ test("crowded sibling fans separate hit targets without moving their river ancho
   for (let i = 1; i < peers.length; i++)
     assert.ok(peers[i]!.y - peers[i - 1]!.y >= 99.99);
   assert.equal(g.anchor.y, 900);
+});
+
+test("unrelated drifting memories stay separate; only explicit groups and elaboration connect", () => {
+  const s = snapshot([]);
+  s.nodes = ["a", "b", "c"].map((id) => node(id, true));
+  assert.equal(storyTrees(s).length, 3);
+  assert.ok(storyTrees(s).every((t) => t.kind === "single"));
+  s.storyGroups = [{ nodeIds: ["a", "b", "c"] }];
+  assert.equal(storyTrees(s)[0]!.kind, "branch");
+  s.storyGroups = [];
+  s.relations = [
+    { from: "b", to: "a", kind: "ELABORATES" },
+    { from: "c", to: "b", kind: "ELABORATES" },
+  ];
+  assert.equal(storyTrees(s)[0]!.members[2]!.depth, 2);
 });

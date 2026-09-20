@@ -355,28 +355,42 @@ export class PresentationStorage {
       (q.start !== undefined && q.end !== undefined && q.start > q.end)
     )
       throw new DomainError("INVALID_QUERY", "river bounds");
-    const where =
-      "COALESCE(json_extract(r.json,'$.status'),'confirmed') <> 'superseded' AND (? IS NULL OR json_extract(r.json,'$.time.end')>=?) AND (? IS NULL OR json_extract(r.json,'$.time.start')<=?) AND (?=0 OR json_extract(r.json,'$.placement')='drifting')";
-    const args = [
-      q.start ?? null,
-      q.start ?? null,
-      q.end ?? null,
-      q.end ?? null,
-      q.drifting ? 1 : 0,
-    ];
-    const base =
-      "FROM memory_revisions r JOIN memory_current c USING(id,revision) WHERE " +
-      where;
-    const total = Number(
-      this.db.prepare("SELECT count(*) n " + base).get(...args)!.n,
-    );
-    const all = this.rows<GraphNode & { sourceCount: number }>(
-      "SELECT json_object('id',r.id,'revision',r.revision,'keySentence',json_extract(r.json,'$.keySentence'),'sourceCount',(SELECT COUNT(DISTINCT transcript_id) FROM source_refs s WHERE s.node_id=r.id AND s.revision=r.revision),'time',json_extract(r.json,'$.time'),'placement',json_extract(r.json,'$.placement'),'status',COALESCE(json_extract(r.json,'$.status'),'confirmed')) json " +
-        base +
-        " ORDER BY json_extract(r.json,'$.time.start'),r.id LIMIT 500 OFFSET ?",
-      ...args,
-      offset,
-    );
+    // Independent budgets: undated testimony can never displace the life spine.
+    const current =
+      "FROM memory_revisions r JOIN memory_current c USING(id,revision) WHERE COALESCE(json_extract(r.json,'$.status'),'confirmed') <> 'superseded'";
+    const project =
+      "SELECT json_object('id',r.id,'revision',r.revision,'keySentence',json_extract(r.json,'$.keySentence'),'sourceCount',(SELECT COUNT(DISTINCT transcript_id) FROM source_refs s WHERE s.node_id=r.id AND s.revision=r.revision),'time',json_extract(r.json,'$.time'),'placement',json_extract(r.json,'$.placement'),'status',COALESCE(json_extract(r.json,'$.status'),'confirmed')) json ";
+    const read = (drifting: boolean, limit: number, page: number) => {
+      const base =
+        current +
+        (drifting
+          ? " AND json_extract(r.json,'$.placement')='drifting'"
+          : " AND json_extract(r.json,'$.placement')='anchored' AND (? IS NULL OR json_extract(r.json,'$.time.end')>=?) AND (? IS NULL OR json_extract(r.json,'$.time.start')<=?)");
+      const args = drifting
+        ? []
+        : [q.start ?? null, q.start ?? null, q.end ?? null, q.end ?? null];
+      const total = Number(
+        this.db.prepare("SELECT count(*) n " + base).get(...args)!.n,
+      );
+      const nodes = this.rows<GraphNode & { sourceCount: number }>(
+        project +
+          base +
+          " ORDER BY json_extract(r.json,'$.time.start'),r.id LIMIT ? OFFSET ?",
+        ...args,
+        limit,
+        page,
+      );
+      return {
+        nodes,
+        total,
+        offset: page,
+        truncated: page + nodes.length < total,
+      };
+    };
+    const dated = read(false, q.drifting ? 0 : 400, q.drifting ? 0 : offset);
+    const drifting = read(true, 100, q.drifting ? offset : 0);
+    const all = [...dated.nodes, ...drifting.nodes];
+    const total = (q.drifting ? 0 : dated.total) + drifting.total;
     const periods = this.db
       .prepare(
         "SELECT CAST(json_extract(r.json,'$.time.start')/120 AS INTEGER)*120 start,count(*) count FROM memory_revisions r JOIN memory_current c USING(id,revision) WHERE COALESCE(json_extract(r.json,'$.status'),'confirmed')<>'superseded' GROUP BY start ORDER BY start LIMIT 100",
@@ -389,26 +403,25 @@ export class PresentationStorage {
       all.filter((n) => conflictForNode.get(n.id, n.id)).map((n) => n.id),
     );
     const ids = new Set(all.map((n) => n.id));
-    const relations = (
-      this.db
-        .prepare(
-          'SELECT from_id as "from",to_id as "to",kind FROM memory_edges ORDER BY id LIMIT 2000',
-        )
-        .all() as unknown as RiverSnapshot["relations"]
-    ).filter(
-      (e) =>
-        ids.has(e.from as GraphNode["id"]) && ids.has(e.to as GraphNode["id"]),
-    );
-    const storyGroups = this.rows<{ related_memory_nodes?: string[] }>(
-      "SELECT json_object('related_memory_nodes',json_extract(json,'$.related_memory_nodes')) json FROM branch_memos ORDER BY branch_id LIMIT 100",
-    )
-      .map((m) => ({
-        nodeIds: (m.related_memory_nodes ?? [])
-          .filter((id) => ids.has(id as GraphNode["id"]))
-          .slice(0, 24),
-      }))
-      .filter((g) => g.nodeIds.length > 1);
-    return {
+    // json_each uses one bounded parameter (<=500 IDs), not interpolated SQL.
+    const visible = JSON.stringify([...ids]);
+    const relations = this.db
+      .prepare(
+        `WITH visible AS (SELECT value id FROM json_each(?))
+      SELECT from_id AS "from",to_id AS "to",kind FROM memory_edges
+      WHERE from_id IN visible AND to_id IN visible AND kind <> 'PRECEDES'
+      ORDER BY CASE kind WHEN 'ELABORATES' THEN 0 ELSE 1 END,id LIMIT 2000`,
+      )
+      .all(visible) as unknown as RiverSnapshot["relations"];
+    const storyGroups = this.rows<{ nodeIds: string[] }>(
+      `WITH visible AS (SELECT value id FROM json_each(?))
+      SELECT json_object('nodeIds',json_group_array(member.value)) json
+      FROM branch_memos b,json_each(b.json,'$.related_memory_nodes') member
+      WHERE member.value IN visible GROUP BY b.branch_id HAVING count(DISTINCT member.value)>1
+      ORDER BY b.branch_id LIMIT 100`,
+      visible,
+    ).map((g) => ({ nodeIds: [...new Set(g.nodeIds)].sort().slice(0, 24) }));
+    const snapshot = {
       graphRevision: this.graph.revision(),
       storyGroups,
       nodes: all.map((n) => ({
@@ -423,9 +436,27 @@ export class PresentationStorage {
       })),
       total,
       offset,
-      truncated: offset + all.length < total,
+      dated: {
+        total: dated.total,
+        offset: dated.offset,
+        truncated: dated.truncated,
+      },
+      drifting: {
+        total: drifting.total,
+        offset: drifting.offset,
+        truncated: drifting.truncated,
+      },
+      truncated: q.drifting ? drifting.truncated : dated.truncated,
       periods,
       relations,
+    };
+    // Hash the bounded, serialized display input, including membership and query.
+    // No full archive/transcript hashing and no frontend deep comparison.
+    return {
+      ...snapshot,
+      projectionRevision: createHash("sha256")
+        .update(JSON.stringify([q, snapshot]))
+        .digest("hex"),
     };
   }
   detail(id: string, revision?: number): MemoryDetail {
