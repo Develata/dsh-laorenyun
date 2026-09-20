@@ -2,9 +2,9 @@
 
 # 领域、提供者与应用契约
 
-> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
+> 前半部分保留最初的目标契约草图；当前实现在下方 v0.2 生效契约与对应源码中。不能用历史草图替代运行类型。
 
-Owner：本文件唯一拥有未来 TypeScript 形状、错误/幂等和工具语义。**完整目标草图 v1；Phase 1 已实现的窄子集见上方源码。** 产品语义、阈值与许可分别链接对应 owner。
+Owner：本文件拥有接口语义说明与类型导航。**以下先保留目标草图 v1（历史设计），现行生效契约见下方 v0.2 节。** 产品语义、阈值与许可分别链接对应 owner。
 
 ## 通用规则
 
@@ -282,7 +282,7 @@ bindDraft固定(sessionId、sourceIds、speakerRevision、draftGeneration、leas
 
 Remote版本为1；未知字段/大小/enum在边界拒绝。更改state/protocol返回兼容版本或明确不支持，不写“尽量兼容”静默丢字段。权限不是靠把按钮藏起来建立。
 
-## Phase 4 实际契约
+## Phase 4 历史契约
 
 后续草图不能覆盖[真实类型](../src/derived/types.ts)。`river`返回≤500摘要及graphRevision/periods/truncated，`memory-detail`按id+可选revision返回有限正文/≤10来源。仅authenticated Host routes提供UI读写，不给模型新增写工具。
 
@@ -290,7 +290,7 @@ Remote版本为1；未知字段/大小/enum在边界拒绝。更改state/protoco
 
 `derived-start`接收客户端幂等id/kind/sessionId/可选personaId或biographyId，返回任务ID；服务端固定模型route和manifest。`derived-list`只返回≤20任务摘要；`derived-view`返回结果，不返回模型路由/提示/manifest原档案。`derived-cancel`取消pending/running，旧产物不动。`export-download`仅允许三种固定文件名，hash验证后私密下载。`source-audio`必须由node revision→transcript→media解析，无任意文件路径。
 
-Persona为观察JSON和inputHash/源ID清单，DB为权威。Biography为固定章节/Section及出处，来源支持完整原句是发布条件；自由改写不在当前renderer能力内。ExportGeneration绑定已发布biography manifest而非实时图。[实现范围与限制](phase-4.md)。
+Persona为观察JSON和inputHash/源ID清单，DB为权威。Biography为固定章节/Section及出处，来源支持完整原句是发布条件；自由改写不在当时renderer能力内。ExportGeneration绑定已发布biography manifest而非实时图。[实现范围与限制](phase-4.md)。
 
 RiverNode.hasOpenConflict是展示投影标志，不改MemoryNode.status。旧自传详情传固定revision，只有显式“查看现在的记忆”才转当前。派生list至多20条（最近17条与三种active合并），长期失败重试不能使最后good版本入口消失。Persona不足观察移入unknown；章节标题限制来源原词/中性词组，年代排序代码保证。
 

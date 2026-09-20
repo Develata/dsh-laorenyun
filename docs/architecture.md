@@ -1,27 +1,27 @@
-> Phase 3 当前实现以 [phase-3](phase-3.md)、[提案类型](../src/memory/types.ts)、[校验](../src/memory/validate.ts)、[worker协议](../src/storage/protocol.ts) 为准；下方未匹配源码的完整产品草图仍是未来契约。
-
-> Phase 2 当前实现边界见 [phase-2](phase-2.md)；下方完整产品草图仍含后续阶段，源码类型为实际字段权威。
-
 # 插件模块与 DSH 适配
 
-> Phase 1 当前实现与验证见 [实现证据](phase-1.md)。本文的完整产品契约仍包含后续阶段；已落地字段以 [TypeScript 类型](../src/domain/types.ts) 和 [worker 操作](../src/storage/protocol.ts) 为准。
-
-Owner：本文件拥有未来代码组织。产品/领域权威见[应用架构](https://github.com/Develata/laorenyun/blob/main/docs/02-architecture.md)；上游版本/源码证据只在[账本](https://github.com/Develata/laorenyun/blob/main/docs/research/upstream.md)。以下目录是设计，不是现存 runtime。
+Owner：本文件拥有实现模块导航；产品不变量由[应用架构](https://github.com/Develata/laorenyun/blob/main/docs/02-architecture.md)拥有。当前为 v0.2.0；[领域类型](../src/domain/types.ts)、[记忆类型](../src/memory/types.ts)、[派生类型](../src/derived/types.ts)、[worker协议](../src/storage/protocol.ts) 是实际字段权威，Phase文档是历史证据。
 
 ```text
 src/
-  domain/       纯类型/时间/冲突规则，零网络/React/DSH依赖
-  application/  interview coordinator / memory queries / biography / export
-  storage/      单领域SQLite worker + RecordingStore/文件事务
-  speech/       Tencent STT/TTS adapter，转换器只收受控media ID
-  dsh/          Host entry、tool/pre-step/Session桥接、Remote生成入口
-  client/       Client model、composer/action/river/theme适配、薄React视图
-skills/         oral-history-interviewer/ （后续创建）
+  domain/   纯领域类型与规则
+  archive/  DSH Workspace 人物档案映射与隔离
+  storage/  单SQLite worker、迁移、原件与领域持久化
+  speech/   腾讯ASR/TTS与受控FFmpeg转换
+  memory/   抽取、校验、冲突、时间查询与调度
+  derived/  Persona、Fact Manifest、Writer/审校、导出
+  river/    有界投影与弧长/故事树几何
+  host/     应用服务装配
+  dsh/      会话、工具、采访接入
+  client/   原生composer、面板、侧栏、设置和React视图
+  probes/   显式开发验证入口
 ```
 
-一个包，`host` 与 `client` 构建 face；采用 DSH bundle manifest/profile patch 注册两面，Client模块遵循上游平台模块共享契约（Cordis/React不能多副本）。采用官方 Typert 生成 Remote contribution，不手写协议兼容层；具体生成命令在固定上游构建验证时确定。contracts.md 的接口名是本项目设计，不是 DSH 已提供 API。
+一个包内分Host/Client编译，不让domain依赖DSH/React/Tencent。原生bundle/profile与公开service/slot负责装配，零DSH源码修改；实际注册与构建方式见[插件manifest](../cordis.patch.yml)、[UI](ui.md)和[发行接缝](deployment-integration.md)。
 
-## DSH 窄适配清单
+## 早期接缝概念表
+
+下面保留原设计用语，部分名称是概念性描述，不能直接当作当前DSH API调用清单；实际适配必须核对当前源码和固定上游公开类型。
 
 | seam | 项目适配责任 |
 |---|---|

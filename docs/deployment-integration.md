@@ -10,4 +10,4 @@ Owner：插件产物和配置接缝；Docker/env/权限/备份由[应用部署](
 
 关闭：停止接入→abort并等待语音操作/FFmpeg→关闭文件/DB worker→释放effects。浏览器卸载释放stream/Audio/URL。转换器固定 `/usr/bin/ffmpeg`，运行镜像负责提供；不暴露任意执行工具。
 
-当前单服务、非root、卷、DSH访问保护的实际回执由[应用Phase2](https://github.com/Develata/laorenyun/blob/main/docs/phase-2.md)维护。registry镜像未发布，FFmpeg二进制发行对应源码义务须完成后再发布。
+当前单服务、非root、卷、DSH访问保护的实际回执见[应用v0.2.0发行证据](https://github.com/Develata/laorenyun/blob/v0.2.0/docs/release-v0.2.0.md)。当前容器分发状态与源码材料门禁统一由[发布操作](https://github.com/Develata/laorenyun/blob/main/docs/12-release.md)维护；不以历史本地构建推导为二进制发布已经完成。
