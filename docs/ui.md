@@ -1,6 +1,6 @@
 # Client 展示与状态
 
-Owner：插件slot/state/theme适配；产品要求见[应用06](https://github.com/Develata/laorenyun/blob/main/docs/06-ui-ux.md)。代码在[src/client](../src/client/)，证据见[phase-2](phase-2.md)。
+Owner：插件slot/state/theme适配；产品要求见[应用06](https://github.com/Develata/laorenyun/blob/main/docs/06-ui-ux.md)。代码在[src/client](../src/client/)，现行演进证据见[v0.2](v0.2.md)，Phase文档保留历史。
 
 - 原生conversation与composer保留。左侧slot贡献speaker、主麦克风、保存/识别状态、恢复草稿、再听、暂停；不新建编辑器。
 - sidebar贡献讲故事/人生长河/我的自传，保留原生设置；Workspace为人物档案，Session为采访记录。无session时用公开sessions.create/open。
@@ -25,11 +25,11 @@ Source/speaker/recognition/receipt由Host轮询；录音stop后的Blob由Indexed
 
 Persona 结果展示五类中文观察/引文/资料不足，成功后默认用于下一次自传；可以关闭。结果、正文和导出归我的自传。详见 [v0.2证据](v0.2.md)。
 
-## Phase 4 历史基线
+## Phase 4 历史 历史基线
 
 [MemoryRiver](../src/client/river.tsx)替换placeholder，复用main slot。导航为“讲故事/人生长河”。SVG语义只表示时间，选中时才画≤10相关线；年代列表提供完整键盘操作。未知时间独立列表，区间与candidate同时有文字，不只颜色。
 
-纠正使用简单文本预览，再放入原生composer（没有自动发送）；可继续修改。来源audio为整段原声，不承诺词级对齐。页面5秒轮询有界展示快照；graphRevision不变保留布局，更新时刷新当前节点；生成结果按ID去重，不每次轮询重复下载正文。
+纠正使用简单文本预览，再放入原生composer（没有自动发送）；可继续修改。来源audio为整段原声，不承诺词级对齐。页面5秒轮询有界展示快照；以projectionRevision判断投影是否更新，包含BranchMemo等不改变graphRevision的展示输入变化；生成结果按ID去重，不每次轮询重复下载正文。
 
 生成操作仅显式按钮，轮询持久状态，不显示假百分比。失败不替换上个版本。360px、平板、桌面、200%缩放、reduced-motion的实际证据见应用Phase4；尚未运行不能预先宣称通过。
 
