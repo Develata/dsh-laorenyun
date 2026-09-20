@@ -28,3 +28,7 @@
 Phase 1 建立的 Host/Client、SQLite worker、原件存储与五答支线门禁持续回归；Phase 2 新增录音/腾讯协议/口述史技能，不能把协议实现当作实网验收。[实现与验证](docs/phase-1.md) 区分已测行为和限制。
 
 开发：Node 24.18+（发行镜像固定 24.21.0）、pnpm 11.7.0，执行 `pnpm install --frozen-lockfile --ignore-scripts`、`pnpm check`、`pnpm pack`。最终用户只运行应用仓库的 Compose。
+
+## 贡献与发布
+
+main 禁止强推和删除，合并前必须通过 GitHub Actions 的 `check`。使用短分支、CI、PR；不要求额外审批人数。产品源码版本仍为 v0.2.0，应用继续固定其已发布 tag 对应的完整插件 SHA，文档维护不移动 tag。容器分发、对应源码门禁和两库发布顺序统一见[应用发布操作](https://github.com/Develata/laorenyun/blob/main/docs/12-release.md)。
