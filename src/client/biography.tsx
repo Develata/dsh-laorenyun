@@ -44,12 +44,17 @@ export function BiographyView({
         </p>
       )}
       <div className="ly-actions">
-        <button
-          disabled={busy || !!active || !sessionId}
-          onClick={() => start("persona")}
-        >
-          自动构建人物画像
-        </button>
+        {!book && (
+          <>
+            {" "}
+            <button
+              disabled={busy || !!active || !sessionId}
+              onClick={() => start("persona")}
+            >
+              自动构建人物画像
+            </button>
+          </>
+        )}
         <button
           className="ly-primary"
           disabled={busy || !!active || !sessionId || !total}
@@ -77,6 +82,12 @@ export function BiographyView({
       {persona && (
         <details className="ly-persona-result" open={book ? undefined : true}>
           <summary>我的表达方式</summary>
+          <button
+            disabled={busy || !!active || !sessionId}
+            onClick={() => start("persona")}
+          >
+            自动构建人物画像
+          </button>
           <p>使用了 {persona.transcriptIds.length} 段本人讲述</p>
           <label>
             <input

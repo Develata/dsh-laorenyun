@@ -62,7 +62,13 @@ export function MemoryDetail({
             {timeLabel(detail.node)}
             {detail.places.length ? ` · ${detail.places.join("、")}` : ""}
           </p>
-          <h2>{detail.node.keySentence}</h2>
+          <h2>
+            {detail.node.keySentence.startsWith(timeLabel(detail.node))
+              ? detail.node.keySentence
+                  .slice(timeLabel(detail.node).length)
+                  .replace(/^[，、,\s]+/, "")
+              : detail.node.keySentence}
+          </h2>
         </header>
         <p className="ly-muted">
           {statuses[detail.node.status ?? "confirmed"]}
@@ -96,62 +102,6 @@ export function MemoryDetail({
                 </button>
               </p>
             ))}
-            <footer className="ly-correction">
-              {" "}
-              <button
-                disabled={pinned}
-                onClick={() => {
-                  setCorrecting(true);
-                  setCorrection("");
-                  setPreview(false);
-                }}
-              >
-                这里不对
-              </button>
-              {correcting && (
-                <div>
-                  <p>
-                    您觉得这里哪里需要改？请完整说清新的说法，再到讲故事页面确认发送。
-                  </p>
-                  <label>
-                    新的讲述
-                    <textarea
-                      value={correction}
-                      onChange={(e) => {
-                        setCorrection(e.target.value);
-                        setPreview(false);
-                      }}
-                      maxLength={4000}
-                    />
-                  </label>
-                  {preview && <blockquote>{correction}</blockquote>}
-                  <div className="ly-actions">
-                    <button
-                      disabled={busy || !correction.trim()}
-                      onClick={() =>
-                        preview
-                          ? void run(async () => {
-                              if (!sessionId) throw new Error("session");
-                              const source = await api<Source>("correction", {
-                                sessionId,
-                                nodeId: detail.node.id,
-                                revision: detail.node.revision,
-                                text: correction,
-                              });
-                              await onCorrection(source);
-                            })
-                          : setPreview(true)
-                      }
-                    >
-                      {preview ? "放入草稿，继续确认" : "预览更正"}
-                    </button>
-                    <button onClick={() => setCorrecting(false)}>
-                      取消更正
-                    </button>
-                  </div>
-                </div>
-              )}
-            </footer>
           </section>
         )}
         <h3>查看来源</h3>
@@ -181,6 +131,59 @@ export function MemoryDetail({
         {detail.truncated && (
           <p>这里只展开最近十段来源，更多来源保留在档案中。</p>
         )}
+        <footer className="ly-correction">
+          <button
+            disabled={pinned}
+            onClick={() => {
+              setCorrecting(true);
+              setCorrection("");
+              setPreview(false);
+            }}
+          >
+            这里不对
+          </button>
+          {correcting && (
+            <div>
+              <p>
+                您觉得这里哪里需要改？请完整说清新的说法，再到讲故事页面确认发送。
+              </p>
+              <label>
+                新的讲述
+                <textarea
+                  value={correction}
+                  onChange={(e) => {
+                    setCorrection(e.target.value);
+                    setPreview(false);
+                  }}
+                  maxLength={4000}
+                />
+              </label>
+              {preview && <blockquote>{correction}</blockquote>}
+              <div className="ly-actions">
+                <button
+                  disabled={busy || !correction.trim()}
+                  onClick={() =>
+                    preview
+                      ? void run(async () => {
+                          if (!sessionId) throw new Error("session");
+                          const source = await api<Source>("correction", {
+                            sessionId,
+                            nodeId: detail.node.id,
+                            revision: detail.node.revision,
+                            text: correction,
+                          });
+                          await onCorrection(source);
+                        })
+                      : setPreview(true)
+                  }
+                >
+                  {preview ? "放入草稿，继续确认" : "预览更正"}
+                </button>
+                <button onClick={() => setCorrecting(false)}>取消更正</button>
+              </div>
+            </div>
+          )}
+        </footer>
       </section>
     </>
   );
