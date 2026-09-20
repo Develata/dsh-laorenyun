@@ -134,7 +134,7 @@ export function StoryForest({
           (expanded === l.tree.id
             ? l.points
             : [l.junction ?? l.points[0]!]
-          ).map((p) => p.y + 120),
+          ).map((p) => p.y + 160),
         ),
       ),
     );

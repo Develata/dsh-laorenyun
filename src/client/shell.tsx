@@ -298,11 +298,16 @@ export async function installShell(
           </section>
         )}
         {!preview &&
-          data?.nodes.slice(0, 8).map((n) => (
-            <p key={n.id}>
-              {n.time.originalText || "漂流记忆"} · {n.keySentence}
-            </p>
-          ))}
+          data?.nodes
+            .slice(0, 8)
+            .map((n) => (
+              <p key={n.id}>
+                {n.time.originalText &&
+                n.keySentence.startsWith(n.time.originalText)
+                  ? n.keySentence
+                  : `${n.time.originalText || "漂流记忆"} · ${n.keySentence}`}
+              </p>
+            ))}
         <button
           style={{
             font: "inherit",
