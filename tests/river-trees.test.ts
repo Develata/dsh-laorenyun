@@ -185,3 +185,31 @@ test("visual junction has no node identity and drifting geometry stays bounded",
     assert.equal(JSON.stringify(data), before);
   }
 });
+
+test("crowded sibling fans separate hit targets without moving their river anchor", () => {
+  const data = {
+    ...snapshot([]),
+    nodes: Array.from({ length: 8 }, (_, i) => node(String(i))),
+  };
+  data.relations = data.nodes
+    .slice(1)
+    .map((n) => ({ from: n.id, to: "0", kind: "ELABORATES" }));
+  const tree = storyTrees(data)[0]!;
+  const g = treeGeometry(
+    tree,
+    {
+      getTotalLength: () => 1000,
+      getPointAtLength: (s) => ({ x: 600, y: s + 400 }),
+    },
+    data.nodes[0]!,
+    23900,
+    24100,
+    1200,
+  );
+  const peers = g.points
+    .filter((p) => p.parent === "0")
+    .sort((a, b) => a.y - b.y);
+  for (let i = 1; i < peers.length; i++)
+    assert.ok(peers[i]!.y - peers[i - 1]!.y >= 99.99);
+  assert.equal(g.anchor.y, 900);
+});

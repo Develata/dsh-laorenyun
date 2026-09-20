@@ -195,6 +195,35 @@ export function treeGeometry(
     points.push(rootPoint);
     visit(children(m.id), rootPoint, 1);
   }
+  // A local collision pass spreads crowded sibling subtrees along the root tangent.
+  // Moving all descendants together preserves the parent-relative subtree shape.
+  for (const parentId of new Set(points.map((p) => p.parent))) {
+    const peers = points.filter(
+      (p) => p.parent === parentId && (grouped || p.parent !== null),
+    );
+    if (peers.length < 2) continue;
+    const along = (p: Point) => p.x * tangent.x + p.y * tangent.y;
+    peers.sort((a, b) => along(a) - along(b) || a.id.localeCompare(b.id));
+    const shifts: number[] = [];
+    let previous = -Infinity;
+    for (const p of peers) {
+      const target = Math.max(along(p), previous + 100);
+      shifts.push(target - along(p));
+      previous = target;
+    }
+    const mean = shifts.reduce((a, b) => a + b, 0) / shifts.length;
+    peers.forEach((p, i) => {
+      const delta = shifts[i]! - mean;
+      const move = (id: string) => {
+        const point = points.find((q) => q.id === id)!;
+        point.x += tangent.x * delta;
+        point.y += tangent.y * delta;
+        for (const child of points.filter((q) => q.parent === id))
+          move(child.id);
+      };
+      move(p.id);
+    });
+  }
   // Keep the entire fan inside the bank. Only the display subtree moves; s/anchor never change.
   // On narrow viewports use a taller fan so touch areas remain distinct.
   if (width < 520) {
