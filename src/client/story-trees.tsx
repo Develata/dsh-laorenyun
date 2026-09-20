@@ -86,7 +86,10 @@ export function StoryForest({
   onExtent?: (extent: number) => void;
 }) {
   const trees = useMemo(
-    () => storyTrees(data).filter((t) => t.drifting === drifting),
+    () =>
+      storyTrees(data)
+        .filter((t) => t.drifting === drifting)
+        .slice(0, drifting ? 12 : 500),
     [data, drifting],
   );
   const [expanded, setExpanded] = useState<string | null>(null),
@@ -95,12 +98,23 @@ export function StoryForest({
     data.nodes.map((n) => [n.id, n]),
   );
   let groveTop = 100;
+  let packed = false;
   const layouts = trees.map((t, i) => {
+    const pack = drifting && t.kind === "single" && width >= 650;
+    if (!pack && packed) {
+      groveTop += 160;
+      packed = false;
+    }
     const localPath: ArcPath = drifting
       ? {
           getTotalLength: () => 500,
           getPointAtLength: (s) => ({
-            x: width < 520 ? 32 : width / 2,
+            x:
+              width < 520
+                ? 32
+                : pack
+                  ? width * (packed ? 0.68 : 0.28) - 65
+                  : width / 2,
             y: groveTop + (s - 250),
           }),
         }
@@ -114,7 +128,7 @@ export function StoryForest({
         min,
         max,
         width,
-        i % 2 ? 1 : -1,
+        drifting ? 1 : i % 2 ? 1 : -1,
       ),
     };
     if (drifting) {
@@ -122,7 +136,10 @@ export function StoryForest({
         expanded === t.id
           ? layout.points
           : [layout.junction ?? layout.points[0]!];
-      groveTop = Math.max(...visible.map((p) => p.y)) + 140;
+      if (pack) {
+        if (packed) groveTop += 160;
+        packed = !packed;
+      } else groveTop = Math.max(...visible.map((p) => p.y)) + 140;
     }
     return layout;
   });
@@ -191,10 +208,12 @@ export function StoryForest({
         const labels = captions(open ? l.points : [root], width);
         return (
           <g key={l.tree.id} data-story-root={l.tree.root}>
-            <path
-              d={curve(l.anchor, l.junction ?? root)}
-              className="ly-tributary-root"
-            />
+            {(!drifting || branch) && (
+              <path
+                d={curve(l.anchor, l.junction ?? root)}
+                className="ly-tributary-root"
+              />
+            )}
             {(open || (!drifting && branch)) && (
               <g
                 className={open ? "ly-tree-open" : "ly-tree-outline"}

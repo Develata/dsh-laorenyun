@@ -1,3 +1,5 @@
+import { storyTrees } from "../river/trees.ts";
+import { decadeSelection } from "../river/navigation.ts";
 import { StoryForest } from "./story-trees.tsx";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { RiverSnapshot } from "../river/types.ts";
@@ -25,7 +27,11 @@ export function Journey({
   const layout = projection?.input === data ? projection.points : [];
   const [extent, setExtent] = useState(0);
   const [groveExtent, setGroveExtent] = useState(360);
-  const [cluster, setCluster] = useState<string[] | null>(null);
+  const pendingDecade = useRef<{
+    year: number;
+    range: string;
+    previous: string;
+  } | null>(null);
   const [list, setList] = useState(false),
     [decade, setDecade] = useState<number | null>(null);
   const dated = useMemo(() => anchors(data.nodes), [data]);
@@ -42,7 +48,9 @@ export function Journey({
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const obs = new ResizeObserver(() => setWidth(el.clientWidth));
+    const obs = new ResizeObserver(() => {
+      if (el.clientWidth) setWidth(el.clientWidth);
+    });
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
@@ -74,7 +82,7 @@ export function Journey({
     if (!el || !curve || !scroller || list) return;
     const length = curve.getTotalLength();
     const stops = data.periods
-      .filter((p) => p.start !== null)
+      .filter((p) => p.start !== null && p.start + 119 >= min && p.start <= max)
       .map((p) => ({
         year: Math.floor(p.start! / 12),
         y: curve.getPointAtLength(arcPosition(p.start!, min, max, length)).y,
@@ -98,6 +106,12 @@ export function Journey({
       cancelAnimationFrame(frame);
     };
   }, [data.periods, geometry, min, max, list]);
+  useEffect(() => {
+    if (range === "drifting" && !dated.length)
+      document
+        .getElementById("ly-drifting-bay")
+        ?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [range, data]);
   const jump = (year: number) => {
     setDecade(year);
     const p = path.current;
@@ -112,49 +126,53 @@ export function Journey({
         : "smooth",
     });
   };
-  const labels = new Set<string>();
-  const occupied = new Set<number>();
-  for (const p of layout) {
-    const cell = Math.floor(p.y / 125);
-    if (!occupied.has(cell)) {
-      occupied.add(cell);
-      labels.add(p.id);
+  const selectDecade = (year: number) => {
+    const action = decadeSelection(range, year);
+    if (action.scroll) {
+      pendingDecade.current = null;
+      jump(year);
+    } else {
+      pendingDecade.current = {
+        year,
+        range: action.range,
+        previous: data.projectionRevision,
+      };
+      onRange(action.range);
     }
-  }
-  const groups = new Map<number, typeof layout>();
-  for (const p of layout) {
-    const key = Math.floor(p.y / 45);
-    const group = groups.get(key) ?? [];
-    group.push(p);
-    groups.set(key, group);
-  }
-  const clusters = [...groups.values()].filter((g) => g.length > 2);
-  const clustered = new Set(clusters.flatMap((g) => g.map((p) => p.id)));
+  };
+  useEffect(() => {
+    const pending = pendingDecade.current;
+    if (
+      pending &&
+      range === pending.range &&
+      data.projectionRevision !== pending.previous &&
+      projection?.input === data
+    ) {
+      pendingDecade.current = null;
+      jump(pending.year);
+    }
+  }, [projection, range, data]);
+  const displayedDrift = useMemo(
+    () =>
+      storyTrees(data)
+        .filter((t) => t.drifting)
+        .slice(0, 12)
+        .reduce((n, t) => n + t.members.length + t.hidden.length, 0),
+    [data],
+  );
   const drift = data.nodes.filter((n) => n.placement === "drifting");
   return (
     <>
-      {cluster && (
-        <section className="ly-access-list">
-          <button onClick={() => setCluster(null)}>← 返回长河全景</button>
-          <h2>这一段岁月</h2>
-          {data.nodes
-            .filter((n) => cluster.includes(n.id))
-            .map((n) => (
-              <p key={n.id}>
-                <button onClick={() => onSelect(n.id)}>
-                  {timeLabel(n)} · {n.keySentence}
-                </button>
-              </p>
-            ))}
-        </section>
-      )}
-      <div hidden={!!cluster} className="ly-journey-toolbar">
+      <div className="ly-journey-toolbar">
         <label>
           浏览
           <select
             aria-label="长河时间范围"
             value={range}
-            onChange={(e) => onRange(e.target.value)}
+            onChange={(e) => {
+              pendingDecade.current = null;
+              onRange(e.target.value);
+            }}
           >
             <option value="all">整段人生</option>
             {data.periods
@@ -180,7 +198,7 @@ export function Journey({
               aria-current={
                 decade === Math.floor(p.start! / 12) ? "date" : undefined
               }
-              onClick={() => jump(Math.floor(p.start! / 12))}
+              onClick={() => selectDecade(Math.floor(p.start! / 12))}
             >
               {Math.floor(p.start! / 12)}
               <small aria-label={`${p.count}段记忆`}>
@@ -188,9 +206,16 @@ export function Journey({
               </small>
             </button>
           ))}
-        <a href="#ly-drifting-bay">漂流湾</a>
+        <button
+          onClick={() => {
+            pendingDecade.current = null;
+            onRange("drifting");
+          }}
+        >
+          漂流湾
+        </button>
       </nav>
-      <div ref={box} className="ly-journey" hidden={!!cluster}>
+      <div ref={box} className="ly-journey" hidden={!dated.length && !list}>
         {list ? (
           <ol className="ly-access-list">
             {data.nodes.map((n) => (
@@ -285,6 +310,24 @@ export function Journey({
           </svg>
         )}
         {!drift.length && <p>暂时没有漂流记忆。</p>}
+        {(data.drifting.truncated || displayedDrift < drift.length) && (
+          <p>
+            还有{" "}
+            {Math.max(
+              0,
+              data.drifting.total - data.drifting.offset - displayedDrift,
+            )}{" "}
+            段等待找到年月的故事。
+            <button
+              onClick={() => {
+                onRange("drifting");
+                setList(true);
+              }}
+            >
+              列表浏览漂流记忆
+            </button>
+          </p>
+        )}
       </section>
     </>
   );

@@ -1,7 +1,13 @@
+import { pollRiver, retainProjection } from "./river-refresh.ts";
 import { memoryPreview } from "./memory-preview.ts";
 import { installModelChoice } from "./model-choice.tsx";
 import { installSpeechSettings } from "./speech-settings.tsx";
-import React, { useEffect, useState, useSyncExternalStore } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { Context } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-client-ui-sidebar/client";
 import type {} from "@deepseek-ai/dsh-client-ui-sidebar-right/client";
@@ -16,6 +22,32 @@ import {
   setMemberships,
   archiveSelection,
 } from "./archive-context.ts";
+function NavIcon({ kind }: { kind: "speech" | "river" | "book" | "archive" }) {
+  const paths = {
+    speech: "M5 4h14v11H10l-5 4V4Z M9 8h6 M9 11h4",
+    river: "M8 3C20 5 3 10 15 13S5 19 14 21 M13 3C25 6 8 10 20 13S10 19 19 21",
+    book: "M12 5C9 3 5 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Zm0 0v15",
+    archive:
+      "M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM5 20v-3c0-5 14-5 14 0v3M3 21h18",
+  };
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d={paths[kind]}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 export interface Archive {
   id: string;
   title: string;
@@ -142,6 +174,8 @@ export async function installShell(
     if (!wide)
       return (
         <button
+          className="ly-compact-icon"
+          title="人物档案与采访记录"
           aria-label="人物档案与采访记录"
           onClick={expandSidebar}
           style={{
@@ -154,7 +188,9 @@ export async function installShell(
             color: "inherit",
           }}
         >
-          册
+          <NavIcon kind="archive" />
+          <span className="ly-rail-tip">人物档案与采访记录</span>
+          <style>{`.ly-compact-icon{position:relative}.ly-rail-tip{display:none;position:absolute;left:42px;top:8px;white-space:nowrap;background:var(--dsw-alias-bg-layer-1);padding:6px 10px;border:1px solid #b8c5b5;font-size:14px;z-index:20}.ly-compact-icon:is(:hover,:focus-visible) .ly-rail-tip{display:block}`}</style>
         </button>
       );
     const current = archives.find((a) => a.id === selected);
@@ -245,6 +281,7 @@ export async function installShell(
   );
   ctx.effect(() => archiveSelection.subscribe(() => memoryPreview.clear()));
   function Preview() {
+    const previewElement = useRef<HTMLElement>(null);
     const preview = useSyncExternalStore(
       memoryPreview.subscribe,
       memoryPreview.getSnapshot,
@@ -256,18 +293,26 @@ export async function installShell(
     const [data, setData] = useState<RiverSnapshot | null>(null);
     const [error, setError] = useState(false);
     useEffect(() => {
-      const c = new AbortController();
       setData(null);
       setError(false);
-      void api<RiverSnapshot>("river", {}, c.signal)
-        .then(setData)
-        .catch(() => {
-          if (!c.signal.aborted) setError(true);
-        });
-      return () => c.abort();
+      return pollRiver(
+        (signal) => api<RiverSnapshot>("river", {}, signal),
+        (snapshot) => {
+          setData((old) => retainProjection(old, snapshot));
+          setError(false);
+        },
+        () => setError(true),
+        () =>
+          !document.hidden &&
+          !!previewElement.current?.checkVisibility() &&
+          !previewElement.current.closest('[aria-hidden="true"]'),
+      );
     }, [activeArchive]);
     return (
-      <section style={{ padding: 24, fontSize: 18, lineHeight: 1.8 }}>
+      <section
+        ref={previewElement}
+        style={{ padding: 24, fontSize: 18, lineHeight: 1.8 }}
+      >
         <h2>人生长河导航</h2>
         <p>采访时，随时看一眼走过的年月。</p>
         {error && <p role="status">暂时无法打开记忆，请重新打开导航。</p>}
@@ -405,14 +450,18 @@ export async function installShell(
     );
   }
   for (const [id, label, icon, order] of [
-    ["conversation", "讲故事", "言", 0],
-    ["laorenyun-river", "人生长河", "川", 1],
-    ["laorenyun-biography", "我的自传", "书", 2],
+    ["conversation", "讲故事", "speech", 0],
+    ["laorenyun-river", "人生长河", "river", 1],
+    ["laorenyun-biography", "我的自传", "book", 2],
   ] as const)
     ctx.slots.inject("sidebar.panellist", () =>
       ctx.slots.register(
         { name: "sidebar.panellist", id, order, label },
-        () => <span aria-hidden="true">{icon}</span>,
+        () => (
+          <span title={label}>
+            <NavIcon kind={icon} />
+          </span>
+        ),
       ),
     );
   ctx.effect(() =>

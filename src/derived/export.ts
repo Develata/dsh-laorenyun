@@ -1,3 +1,4 @@
+import { readingTitle } from "../river/reading-title.ts";
 import { createHash } from "node:crypto";
 import { mkdir, open, rename, readFile, lstat } from "node:fs/promises";
 import { join } from "node:path";
@@ -34,10 +35,11 @@ export function exportDocuments(
     ? "部分记忆仍有不同说法，本版暂未写入争议细节。"
     : "";
   let markdown = `# 我的自传\n\n生成时间：${new Date(g.createdAt).toISOString()}；记忆版本：${m.graphRevision}\n\n${warning}\n\n${conflicts}\n\n`;
-  let html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; media-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>我的自传 · 老人云</title><style>body{max-width:48rem;margin:auto;padding:24px;background:#faf7f0;color:#393b35;font:20px/1.8 system-ui,sans-serif;overflow-wrap:anywhere}a{color:#315d51}section{margin:3rem 0}blockquote{margin:1rem;padding-left:1rem;border-left:3px solid #8caf9c}nav a{display:block;padding:8px}small{font-size:16px}</style></head><body><h1>我的自传</h1><p>${warning}</p><p>${conflicts}</p><p>生成时间：${new Date(g.createdAt).toISOString()} · 记忆版本 ${m.graphRevision}</p><nav aria-label="章节">${b.sections.map((s) => `<a href="#${s.id}">${escapeHtml(s.title)}</a>`).join("")}</nav>`;
-  for (const s of b.sections) {
-    markdown += `## ${md(s.title)}\n\n<!-- ${s.id} -->\n\n${md(s.text)}\n\n来源：${s.sourceRefs.map((id) => `[^${sources.get(id)}]`).join(" ")}\n\n`;
-    html += `<section id="${s.id}"><h2>${escapeHtml(s.title)}</h2>${s.text
+  let html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; media-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>我的自传 · 老人云</title><style>body{max-width:48rem;margin:auto;padding:24px;background:#faf7f0;color:#393b35;font:20px/1.8 system-ui,sans-serif;overflow-wrap:anywhere}a{color:#315d51}section{margin:3rem 0}blockquote{margin:1rem;padding-left:1rem;border-left:3px solid #8caf9c}nav a{display:block;padding:8px}small{font-size:16px}</style></head><body><h1>我的自传</h1><p>${warning}</p><p>${conflicts}</p><p>生成时间：${new Date(g.createdAt).toISOString()} · 记忆版本 ${m.graphRevision}</p><nav aria-label="章节">${b.sections.map((s, i) => `<a href="#${s.id}">${escapeHtml(readingTitle(s.title, s.text, i))}</a>`).join("")}</nav>`;
+  for (const [i, s] of b.sections.entries()) {
+    const title = readingTitle(s.title, s.text, i);
+    markdown += `## ${md(title)}\n\n<!-- ${s.id} -->\n\n${md(s.text)}\n\n来源：${s.sourceRefs.map((id) => `[^${sources.get(id)}]`).join(" ")}\n\n`;
+    html += `<section id="${s.id}"><h2>${escapeHtml(title)}</h2>${s.text
       .split("\n\n")
       .map((t) => `<p>${escapeHtml(t)}</p>`)
       .join(

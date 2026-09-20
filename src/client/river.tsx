@@ -1,3 +1,4 @@
+import { retainProjection } from "./river-refresh.ts";
 import { memoryPreview } from "./memory-preview.ts";
 import { archiveSelection } from "./archive-context.ts";
 import { Journey } from "./journey.tsx";
@@ -17,7 +18,7 @@ import type {
   ExportResult,
 } from "../derived/types.ts";
 import { api } from "./api.ts";
-const css = `.ly-river{height:100%;overflow:auto;padding:80px clamp(16px,4vw,48px) 48px;color:var(--dsw-alias-label-primary);font-size:19px;line-height:1.7;box-sizing:border-box}.ly-river *{box-sizing:border-box}.ly-river h1{font-size:clamp(28px,4vw,38px);margin:0}.ly-river h2{font-size:24px}.ly-river button,.ly-river select,.ly-river a{font:inherit}.ly-river button,.ly-river select{min-height:48px;border:1px solid #9bafa4;padding:8px 14px;border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:inherit;cursor:pointer}.ly-river button:disabled{opacity:.55;cursor:wait}.ly-river :focus-visible{outline:3px solid #47796a;outline-offset:3px}.ly-river .ly-primary{background:#406c5f;color:#fff;border-color:#406c5f}.ly-river p{max-width:64ch}.ly-river .ly-muted{color:var(--dsw-alias-label-secondary)}.ly-river .ly-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:32px;max-width:1150px}.ly-river svg{width:100%;max-height:660px}.ly-river .ly-list{list-style:none;margin:0;padding:0}.ly-river .ly-list button{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid #c6cfc7;border-radius:0;padding:16px 10px}.ly-river small{font-size:16px}.ly-river blockquote{border-left:3px solid #86a694;margin:16px 0;padding:4px 16px;white-space:pre-wrap;overflow-wrap:anywhere}.ly-river textarea{width:100%;min-height:120px;font:inherit;padding:12px;color:inherit;background:var(--dsw-alias-bg-layer-1);border:1px solid #8ea496;border-radius:8px}.ly-river .ly-actions{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.ly-river .ly-detail{border-top:2px solid #739481;padding-top:16px}.ly-river .ly-drifting{border-top:1px dashed #9aa994;padding-top:16px}.ly-river .ly-book{max-width:760px;border-top:1px solid #adb9ae;padding-top:24px;margin-top:36px}.ly-river a{color:inherit;text-decoration:underline;display:inline-block;padding:10px}.ly-river audio{width:100%}@media(max-width:720px){.ly-river .ly-grid{grid-template-columns:minmax(0,1fr)}.ly-river{padding-top:112px}.ly-river svg{height:480px}.ly-river .ly-detail{scroll-margin-top:110px}}@media(prefers-reduced-motion:reduce){.ly-river *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}`;
+const css = `.ly-river{height:100%;overflow:auto;padding:80px clamp(16px,4vw,48px) 48px;color:var(--dsw-alias-label-primary);font-size:19px;line-height:1.7;box-sizing:border-box}.ly-river *{box-sizing:border-box}.ly-river h1{font-size:clamp(28px,4vw,38px);margin:0}.ly-river h2{font-size:24px}.ly-river button,.ly-river select,.ly-river a{font:inherit}.ly-river button,.ly-river select{min-height:48px;border:1px solid #9bafa4;padding:8px 14px;border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:inherit;cursor:pointer}.ly-river button:disabled{opacity:.55;cursor:wait}.ly-river :focus-visible{outline:3px solid #47796a;outline-offset:3px}.ly-river .ly-primary{background:#406c5f;color:#fff;border-color:#406c5f}.ly-river p{max-width:64ch}.ly-river .ly-muted{color:var(--dsw-alias-label-secondary)}.ly-river .ly-list{list-style:none;margin:0;padding:0}.ly-river .ly-list button{width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid #c6cfc7;border-radius:0;padding:16px 10px}.ly-river small{font-size:16px}.ly-river blockquote{border-left:3px solid #86a694;margin:16px 0;padding:4px 16px;white-space:pre-wrap;overflow-wrap:anywhere}.ly-river textarea{width:100%;min-height:120px;font:inherit;padding:12px;color:inherit;background:var(--dsw-alias-bg-layer-1);border:1px solid #8ea496;border-radius:8px}.ly-river .ly-actions{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}.ly-river .ly-detail{border-top:2px solid #739481;padding-top:16px}.ly-river .ly-book{max-width:760px;border-top:1px solid #adb9ae;padding-top:24px;margin-top:36px}.ly-river a{color:inherit;text-decoration:underline;display:inline-block;padding:10px}.ly-river audio{width:100%}@media(max-width:720px){.ly-river{padding-top:112px}.ly-river .ly-detail{scroll-margin-top:110px}}@media(prefers-reduced-motion:reduce){.ly-river *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}`;
 interface Props {
   mode?: "river" | "biography";
   sessionId: string | null;
@@ -75,17 +76,7 @@ export function MemoryRiver({
           api<GenerationSummary[]>("derived-list", {}, controller.signal),
         ]);
         if (stopped) return;
-        setData((old) =>
-          old &&
-          old.graphRevision === snapshot.graphRevision &&
-          old.offset === snapshot.offset &&
-          old.total === snapshot.total &&
-          old.truncated === snapshot.truncated &&
-          JSON.stringify(old.nodes.map((n) => n.id)) ===
-            JSON.stringify(snapshot.nodes.map((n) => n.id))
-            ? old
-            : snapshot,
-        );
+        setData((old) => retainProjection(old, snapshot));
         setJobs(list);
         for (const kind of ["persona", "biography", "export"] as const) {
           const published = list.find(
@@ -212,7 +203,7 @@ export function MemoryRiver({
             <p role="status">正在打开人生长河……</p>
           ) : (
             <>
-              {data.total === 0 && (
+              {data.total === 0 && Object.keys(query).length === 0 && (
                 <p>
                   这里还没有故事。每一次讲述，都会慢慢汇入您的人生长河。
                   <button onClick={onInterview}>去讲第一个故事</button>
@@ -245,7 +236,9 @@ export function MemoryRiver({
                     onClick={() =>
                       setQuery({
                         ...query,
-                        offset: (Number(query.offset) || 0) + 500,
+                        offset:
+                          (Number(query.offset) || 0) +
+                          (query.drifting ? 100 : 400),
                       })
                     }
                   >

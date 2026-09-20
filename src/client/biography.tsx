@@ -37,10 +37,12 @@ export function BiographyView({
 }) {
   return (
     <section className="ly-book">
-      <h2>把讲述留成一本书</h2>
-      <p>
-        自传来自已有记忆。人物画像只整理表达习惯，不判断性格，也不会补写人生。
-      </p>
+      {!book && <h2>把讲述留成一本书</h2>}
+      {!book && (
+        <p>
+          自传来自已有记忆。人物画像只整理表达习惯，不判断性格，也不会补写人生。
+        </p>
+      )}
       <div className="ly-actions">
         <button
           disabled={busy || !!active || !sessionId}
@@ -53,7 +55,7 @@ export function BiographyView({
           disabled={busy || !!active || !sessionId || !total}
           onClick={() => start("biography")}
         >
-          生成我的自传
+          {book ? "重新整理自传" : "生成我的自传"}
         </button>
         <button
           disabled={busy || !!active || !book}
@@ -73,8 +75,8 @@ export function BiographyView({
         </nav>
       )}
       {persona && (
-        <section className="ly-persona-result">
-          <h2>我的表达方式</h2>
+        <details className="ly-persona-result" open={book ? undefined : true}>
+          <summary>我的表达方式</summary>
           <p>使用了 {persona.transcriptIds.length} 段本人讲述</p>
           <label>
             <input
@@ -117,7 +119,7 @@ export function BiographyView({
               )}
             </section>
           ))}
-        </section>
+        </details>
       )}
       {active && (
         <p role="status">

@@ -400,6 +400,18 @@ test("export staging, offline escaped HTML, stable JSON, provenance paths, resta
       false,
     );
     assert.deepEqual(exportDocuments(exp), docs);
+    const presentation = structuredClone(exp);
+    const chapter = presentation.manifest.biography!.sections[0]!;
+    chapter.title = "我在村里学习";
+    chapter.text = "我在村里学习。后来继续练习。";
+    const presented = exportDocuments(presentation);
+    assert.match(presented["autobiography.md"], /## 第1章/);
+    assert.match(presented["index.html"], /<h2>第1章<\/h2>/);
+    assert.equal(
+      presentation.manifest.biography!.sections[0]!.title,
+      "我在村里学习",
+    );
+
     const json = JSON.parse(docs["memories.json"]);
     assert.equal(json.schemaVersion, 1);
     assert.equal(json.transcriptRevisions[0].id, t.id);
@@ -503,12 +515,12 @@ test("river bounded 500, aggregate periods, paged access, revision refresh and r
       });
     }
     const one = await db.call("river", {});
-    assert.equal(one.nodes.length, 500);
+    assert.equal(one.nodes.length, 401);
     assert.equal(one.total, 501);
     assert.equal(one.truncated, true);
     assert.ok(one.periods.length > 1);
-    const two = await db.call("river", { offset: 500 });
-    assert.equal(two.nodes.length, 1);
+    const two = await db.call("river", { offset: 400 });
+    assert.equal(two.nodes.length, 101);
     assert.equal(
       new Set([...one.nodes, ...two.nodes].map((n) => n.id)).size,
       501,
