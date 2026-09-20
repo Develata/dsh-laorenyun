@@ -229,6 +229,13 @@ export function StoryForest({
                 onClick={() => setExpanded(open ? null : l.tree.id)}
                 onKeyDown={key(() => setExpanded(open ? null : l.tree.id))}
               >
+                <rect
+                  x={l.junction.x - 23}
+                  y={l.junction.y - 23}
+                  width={46}
+                  height={46}
+                  fill="transparent"
+                />
                 <path
                   d={`M ${l.junction.x} ${l.junction.y - 14} Q ${l.junction.x + 28} ${l.junction.y} ${l.junction.x} ${l.junction.y + 14} Q ${l.junction.x - 28} ${l.junction.y} ${l.junction.x} ${l.junction.y - 14}`}
                   className="ly-junction"
@@ -302,7 +309,7 @@ export function StoryForest({
                         <small>
                           {n.placement === "drifting" ? "" : timeLabel(n)}
                           {p.depth === 0 && branch && !l.junction
-                            ? ` · ${count} 个故事`
+                            ? `${n.placement === "drifting" ? "" : " · "}${count} 个故事`
                             : ""}
                         </small>
                         <span>
@@ -364,7 +371,7 @@ export function StoryForest({
             >
               <rect
                 x={Math.max(4, Math.min(width - 174, p.x - 85))}
-                y={p.y - 80}
+                y={p.y + 104}
                 width={170}
                 height={42}
                 rx={3}
@@ -372,7 +379,7 @@ export function StoryForest({
               />
               <text
                 x={Math.max(4, Math.min(width - 174, p.x - 85)) + 85}
-                y={p.y - 52}
+                y={p.y + 132}
                 textAnchor="middle"
                 fill="#fff"
                 fontSize="17"

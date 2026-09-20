@@ -21,5 +21,6 @@ export const experienceCss = `
 @media(min-width:651px){.ly-time-nav{float:left;width:82px;height:0;overflow:visible;display:flex;flex-direction:column;flex-wrap:nowrap;top:24px;box-shadow:none;background:transparent;gap:12px}.ly-time-nav button{text-align:left;padding:10px 6px;border-left:2px solid transparent;border-bottom:0}.ly-time-nav button[aria-current]{border-left-color:#a88751}.ly-time-nav a{padding:10px 0}.ly-journey{width:calc(100% - 100px);margin-left:100px}.ly-bay{margin-left:100px}.ly-time-nav small{letter-spacing:2px}.ly-bay svg{max-width:100%}}
 @media(max-width:650px){.ly-time-nav{position:relative;box-shadow:none;top:auto}.ly-story-forest g[role=button]{scroll-margin-block:100px}}
 .ly-tree-outline{opacity:.22;pointer-events:none}.ly-tree-outline .ly-tributary{animation:none}.ly-tree-caption{background:transparent;text-shadow:0 0 5px var(--dsw-alias-bg-base),0 0 10px var(--dsw-alias-bg-base)}
+.ly-story-forest g[role=button]:focus-visible{outline:none}.ly-story-forest g[role=button]:focus-visible .ly-stone,.ly-story-forest g[role=button]:focus-visible .ly-junction{stroke:#ad8750;stroke-width:4}.ly-story-forest g[role=button]:focus-visible text{font-weight:600}
 @media(prefers-reduced-motion:reduce){.ly-experience *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 `;
