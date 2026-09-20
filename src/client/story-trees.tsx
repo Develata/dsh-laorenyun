@@ -206,6 +206,11 @@ export function StoryForest({
           count = l.tree.members.length + l.tree.hidden.length;
         const branch = l.tree.kind !== "single";
         const labels = captions(open ? l.points : [root], width);
+        const rootLabel = labels.get(root.id)!;
+        const rootActionY =
+          rootLabel.y < root.y
+            ? rootLabel.y - 12
+            : rootLabel.y + rootLabel.height + 26;
         return (
           <g key={l.tree.id} data-story-root={l.tree.root}>
             {(!drifting || branch) && (
@@ -355,9 +360,17 @@ export function StoryForest({
                 onClick={() => pick(root.id)}
                 onKeyDown={key(() => pick(root.id))}
               >
+                <rect
+                  x={rootLabel.x}
+                  y={rootActionY - 28}
+                  width={148}
+                  height={44}
+                  fill="transparent"
+                />
                 <text
-                  x={Math.max(10, Math.min(width - 150, root.x - 75))}
-                  y={root.y - 38}
+                  x={rootLabel.x + 74}
+                  y={rootActionY}
+                  textAnchor="middle"
                   className="ly-tree-control"
                 >
                   查看主故事 ↗
