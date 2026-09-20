@@ -1,6 +1,6 @@
 # dsh-laorenyun
 
-> v0.2.0-rc.6：RC4叙事与RC5视觉保持；已加固河流规模查询、刷新和信息层级，等待作者审图，实际截图和最终状态见 [v0.2](docs/v0.2.md)。v0.1.0 保持不变。
+> v0.2.0 源码发行：冻结已验收 RC6 实现。发行边界见[应用发行说明](https://github.com/Develata/laorenyun/blob/v0.2.0/docs/release-v0.2.0.md)，历史验收见 [v0.2](docs/v0.2.md)。R2 physical microphone / R3 physical-human recovery 仍 PENDING；v0.1.0 保持不变。
 
 老人云的 DeepSeek Harness 业务插件仓库。拥有语音、口述史采访编排、SQLite 时间记忆图、出处/冲突、记忆河流、人物表达和自传导出。
 
