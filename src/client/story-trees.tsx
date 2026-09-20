@@ -167,7 +167,11 @@ export function StoryForest({
         const a = visible.get(e.from),
           b = visible.get(e.to);
         return a && b ? (
-          <g key={i}>
+          <g
+            key={i}
+            role="img"
+            aria-label={e.kind === "CAUSES" ? "讲述中的因果" : "相关故事"}
+          >
             <path d={curve(a, b)} className="ly-crosslink" />
             <text
               x={(a.x + b.x) / 2}

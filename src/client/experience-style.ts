@@ -22,5 +22,6 @@ export const experienceCss = `
 @media(max-width:650px){.ly-time-nav{position:relative;box-shadow:none;top:auto}.ly-story-forest g[role=button]{scroll-margin-block:100px}}
 .ly-tree-outline{opacity:.22;pointer-events:none}.ly-tree-outline .ly-tributary{animation:none}.ly-tree-caption{background:transparent;text-shadow:0 0 5px var(--dsw-alias-bg-base),0 0 10px var(--dsw-alias-bg-base)}
 .ly-story-forest g[role=button]:focus-visible{outline:none}.ly-story-forest g[role=button]:focus-visible .ly-stone,.ly-story-forest g[role=button]:focus-visible .ly-junction{stroke:#ad8750;stroke-width:4}.ly-story-forest g[role=button]:focus-visible text{font-weight:600}
+.ly-story-forest :focus-visible{outline:none}.ly-story-forest g[role=button]:focus-within .ly-stone{stroke:#ad8750;stroke-width:4}@media(max-width:650px){.ly-relation-label{display:none}}
 @media(prefers-reduced-motion:reduce){.ly-experience *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 `;
